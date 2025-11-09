@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>FMttn — LinkMaker (outil auteur)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body{margin:0; font:14px/1.45 system-ui,Arial; background:#f5f6f8; color:#111}
+  .top{display:flex; gap:12px; align-items:center; padding:12px; background:#fff; border-bottom:1px solid #e5e7eb}
+  .top input[type="number"]{width:90px; padding:6px 8px}
+  .btn{border:1px solid #d1d5db; background:#fff; padding:6px 10px; border-radius:8px; cursor:pointer}
+  .btn-amber{background:#ffd166;border-color:#e9b44e}
+  .wrap{display:flex; gap:16px; padding:16px}
+  .stage{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.06)}
+  #box{position:relative; display:inline-block}
+  #img{display:block; max-width:100%; height:auto}
+  #ov{position:absolute; inset:0; pointer-events:none}
+  #dr{position:absolute; inset:0; pointer-events:auto}
+  .hot{position:absolute; border:1px dashed rgba(255,200,0,.8); background:rgba(255,200,0,.15)}
+  .side{width:380px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; overflow:auto; max-height:80vh}
+  .side h3{margin:4px 0 8px 0}
+  .row{display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap}
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th,td{border-bottom:1px solid #eee; padding:6px 4px; text-align:left; vertical-align:top}
+  code{background:#f3f4f6; padding:0 4px; border-radius:4px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>Page : <input id="page" type="number" min="1" step="1" value="1" /></div>
+  <button class="btn" id="prev">◂</button>
+  <button class="btn" id="next">▸</button>
+  <button class="btn" id="fit">Adapter</button>
+  <button class="btn" id="clearPage">Effacer la page</button>
+  <input id="import" type="file" accept="application/json" hidden />
+  <button class="btn" id="importBtn">Importer JSON</button>
+  <button class="btn btn-amber" id="exportBtn">Exporter JSON</button>
+  <span id="hint" style="margin-left:auto; opacity:.7">Trace un rectangle → saisis une URL ou <code>p:12</code></span>
+</div>
+
+<div class="wrap">
+  <div class="stage">
+    <div id="box">
+      <img id="img" alt="page" />
+      <canvas id="ov"></canvas>
+      <canvas id="dr"></canvas>
+    </div>
+  </div>
+
+  <aside class="side">
+    <h3>Liens de la page <span id="pnum">1</span></h3>
+    <div class="row" style="font-size:13px; opacity:.8">
+      URL externe : <code>https://…</code> &nbsp;|&nbsp; Interne : <code>p:12</code>
+    </div>
+    <table>
+      <thead><tr><th>Type</th><th>Cible</th><th>Zone (%)</th><th></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+  </aside>
+</div>
+
+<script>
+/** paramètres : même arbo que la liseuse **/
+const TOTAL_PAGES = 4; // ← adapte
+const ROOT = "../pages";
+const docPath = n => `${ROOT}/page${n}/page${n}.png`;
+
+/** état **/
+let cur = 1;
+const LINKS = {}; // { "1":[{kind:'external'|'internal', href? gotoPage?, xPct,yPct,wPct,hPct}], ... }
+
+const $page = document.getElementById('page');
+const $pnum = document.getElementById('pnum');
+const $img = document.getElementById('img');
+const $ov = document.getElementById('ov');
+const $dr = document.getElementById('dr');
+const $box = document.getElementById('box');
+const $list = document.getElementById('list');
+const $prev = document.getElementById('prev');
+const $next = document.getElementById('next');
+const $fit  = document.getElementById('fit');
+const $clearPage = document.getElementById('clearPage');
+const $import = document.getElementById('import');
+const $importBtn = document.getElementById('importBtn');
+const $exportBtn = document.getElementById('exportBtn');
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+function loadPage(n){
+  cur = clamp(n, 1, TOTAL_PAGES);
+  $page.value = String(cur);
+  $pnum.textContent = String(cur);
+  $img.src = docPath(cur);
+}
+
+function refreshCanvasSizes(){
+  $ov.width = $dr.width = $img.naturalWidth || $img.width;
+  $ov.height = $dr.height = $img.naturalHeight || $img.height;
+  $box.style.width = $ov.width + 'px';
+  $box.style.height = $ov.height + 'px';
+  drawHotspots(); drawDraft(null);
+}
+
+function drawHotspots(){
+  const ctx = $ov.getContext('2d');
+  ctx.clearRect(0,0,$ov.width,$ov.height);
+  // (dessin pas indispensable car on ajoute aussi des divs, on garde canvas propre)
+  // On rend visuel via des DIVs :
+  document.querySelectorAll('.hot').forEach(el=>el.remove());
+  const list = LINKS[String(cur)] || [];
+  for(const L of list){
+    const d = document.createElement('div');
+    d.className = 'hot';
+    d.style.left   = (L.xPct) + '%';
+    d.style.top    = (L.yPct) + '%';
+    d.style.width  = (L.wPct) + '%';
+    d.style.height = (L.hPct) + '%';
+    $box.appendChild(d);
+  }
+}
+
+function drawDraft(r){
+  const ctx = $dr.getContext('2d');
+  ctx.clearRect(0,0,$dr.width,$dr.height);
+  if(!r) return;
+  ctx.setLineDash([]);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#9CA3AF';
+  const x = r.w>=0 ? r.x : r.x + r.w;
+  const y = r.h>=0 ? r.y : r.y + r.h;
+  const w = Math.abs(r.w), h = Math.abs(r.h);
+  ctx.strokeRect(x,y,w,h);
+}
+
+function listRender(){
+  const arr = LINKS[String(cur)] || [];
+  $list.innerHTML = '';
+  arr.forEach((L, i)=>{
+    const tr = document.createElement('tr');
+    const type = L.kind==='internal' ? 'Interne' : 'Externe';
+    const cible = L.kind==='internal' ? ('Page ' + L.gotoPage) : (L.href||'');
+    const zone = `${L.xPct.toFixed(2)}%,${L.yPct.toFixed(2)}% • ${L.wPct.toFixed(2)}%×${L.hPct.toFixed(2)}%`;
+    tr.innerHTML = `<td>${type}</td><td>${cible}</td><td><code>${zone}</code></td>
+      <td><button data-i="${i}" class="del btn">Suppr.</button></td>`;
+    $list.appendChild(tr);
+  });
+  $list.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const i = +btn.dataset.i;
+      LINKS[String(cur)].splice(i,1);
+      if(!LINKS[String(cur)].length) delete LINKS[String(cur)];
+      listRender(); drawHotspots();
+    });
+  });
+}
+
+function toPctRect(pxRect){
+  const W = $ov.width, H = $ov.height;
+  const x = pxRect.w>=0 ? pxRect.x : pxRect.x + pxRect.w;
+  const y = pxRect.h>=0 ? pxRect.y : pxRect.y + pxRect.h;
+  const w = Math.abs(pxRect.w), h = Math.abs(pxRect.h);
+  return {
+    xPct: +(x/W*100).toFixed(3),
+    yPct: +(y/H*100).toFixed(3),
+    wPct: +(w/W*100).toFixed(3),
+    hPct: +(h/H*100).toFixed(3),
+  };
+}
+
+function promptTarget(){
+  let s = prompt("URL (https://...) ou lien interne 'p:12' :", "https://");
+  if(!s) return null;
+  s = s.trim();
+  if(/^p:\s*\d+$/i.test(s)){
+    return { kind:'internal', gotoPage: parseInt(s.split(':')[1],10) };
+  }
+  return { kind:'external', href: s };
+}
+
+/* dessin pour créer un hotspot */
+(function attachDraw(){
+  let draft = null;
+  const toLocal = e => {
+    const r = $dr.getBoundingClientRect();
+    const sx = $dr.width / r.width, sy = $dr.height / r.height;
+    return { x:(e.clientX - r.left)*sx, y:(e.clientY - r.top)*sy };
+  };
+  $dr.addEventListener('mousedown', e=>{ draft = toLocal(e); draft.w=0; draft.h=0; drawDraft(draft); });
+  window.addEventListener('mousemove', e=>{ if(!draft) return; const m=toLocal(e); draft.w = m.x - draft.x; draft.h = m.y - draft.y; drawDraft(draft); });
+  window.addEventListener('mouseup', ()=>{
+    if(!draft) return;
+    const rect = { x:draft.x, y:draft.y, w:draft.w, h:draft.h }; draft = null; drawDraft(null);
+    if(Math.abs(rect.w)<6 || Math.abs(rect.h)<6) return;
+    const pct = toPctRect(rect);
+    const tgt = promptTarget();
+    if(!tgt) return;
+    const entry = { ...pct, ...tgt };
+    const key = String(cur);
+    if(!LINKS[key]) LINKS[key]=[];
+    LINKS[key].push(entry);
+    listRender(); drawHotspots();
+  });
+})();
+
+/* navigation + import/export */
+$img.addEventListener('load', refreshCanvasSizes);
+$page.addEventListener('change', ()=>loadPage(parseInt($page.value,10)));
+$prev.addEventListener('click', ()=>loadPage(cur-1));
+$next.addEventListener('click', ()=>loadPage(cur+1));
+$fit.addEventListener('click', ()=>{ // adapte l’image à la largeur de la fenêtre
+  const maxW = Math.min(window.innerWidth - 430, 1200);
+  $img.style.maxWidth = maxW + 'px';
+  setTimeout(refreshCanvasSizes, 0);
+});
+$clearPage.addEventListener('click', ()=>{
+  if (LINKS[String(cur)]) delete LINKS[String(cur)];
+  listRender(); drawHotspots();
+});
+$importBtn.addEventListener('click', ()=> $import.click());
+$import.addEventListener('change', async ()=>{
+  const f = $import.files[0]; if(!f) return;
+  try{
+    const txt = await f.text();
+    const json = JSON.parse(txt);
+    // normalise clés vers "1","2",...
+    for(const [k, v] of Object.entries(json||{})){
+      const kn = String(parseInt(k,10));
+      if(!kn || kn==='NaN' || !Array.isArray(v)) continue;
+      LINKS[kn] = v;
+    }
+    listRender(); drawHotspots();
+    alert('Import OK');
+  }catch(e){ alert('JSON invalide'); }
+});
+$exportBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(LINKS, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'links.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+});
+
+loadPage(1);
+</script>
+</body>
+</html>

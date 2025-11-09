@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+.textLayer { position: absolute; inset: 0; pointer-events: auto; }
+canvas { image-rendering: auto; }
+.annotationLayer { position: absolute; inset: 0; pointer-events: auto; }
+
+.pdfScrollWrap { max-width:1100px; margin:0 auto; padding:12px; }
+.pageShell { position:relative; margin:24px auto; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.08); }
+.pageBadge { position:absolute; top:8px; right:8px; background:#111; color:#fff; padding:4px 8px; border-radius:999px; font:500 12px/1 system-ui,Arial; }
+.toolbar { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #ddd; padding:10px 12px; }
+.annotationLayer, .textLayer { position:absolute; inset:0; pointer-events:auto; }
+canvas { image-rendering:auto; display:block; }

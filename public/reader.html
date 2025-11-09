@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>FMttn — Liseuse PNG + Corrections</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- MANIFEST INLINE (fallback pour file://). Mets ici tes pages quand tu ouvres en double-clic. -->
+<script id="manifestInline" type="application/json">
+{
+  "root": "./pages",
+  "pages": [1,2,3,4]
+}
+</script>
+
+<style>
+  :root{ --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; font:14px/1.45 system-ui,Arial; background:var(--bg); color:var(--ink);
+        overflow-y:scroll; overflow-x:hidden; }
+
+  .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
+  #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center; }
+  .flow-1up{display:block}
+  .flow-1up .page{margin:0 0 var(--gap) 0;}
+  .flow-2up{display:block}
+  .spread{ display:flex; justify-content:center; align-items:flex-start; column-gap:var(--gutter); margin:0 0 var(--gap) 0 }
+
+  .page{ position:relative; display:block; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.08);
+         border-radius:8px; width:fit-content; }
+  .page.missing{ outline:3px solid var(--warn); }
+  .spacer{ background:transparent; box-shadow:none; border:1px dashed #e5e7eb }
+  .box{position:relative; display:inline-block; will-change:width,height}
+  .page img{display:block;max-width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+
+  /* calques */
+  .ov{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1}
+  .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3}
+
+  /* Couche des liens */
+  .linksLayer{
+    position:absolute; left:0; top:0;
+    width:0; height:0;
+    z-index:2; pointer-events:auto;
+    transform-origin: top left;
+  }
+  .linksLayer.links-blocked{ pointer-events:none; }
+  .link-hotspot{ position:absolute; display:block; outline:none; border:0; background:transparent; }
+  .linksLayer:not(.links-blocked) .link-hotspot{ cursor:pointer; }
+  .link-hotspot:focus{ outline:2px dashed transparent; outline-offset:2px; }
+  .link-hotspot.dbg{ background:rgba(255,200,0,.18); border:1px dashed rgba(255,200,0,.55); }
+
+  /* panneau */
+  .side{ position:fixed; top:12px; right:12px; bottom:12px; width:var(--panelW); background:#fff; border:1px solid #e5e7eb;
+         border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:10px; padding:10px;
+         z-index:20; overflow:auto; transition:transform .2s, box-shadow .2s; }
+  .side.collapsed{ transform:translateX(calc(100% + 40px)); box-shadow:none; }
+  .header{display:flex; justify-content:center; align-items:center}
+  .title{font-weight:800}
+  .section{border:1px solid #e5e7eb;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .btn{ position:relative; border:1px solid #d1d5db; background:#fff; padding:6px 10px; border-radius:8px; cursor:pointer; user-select:none; overflow:hidden; }
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-dark{background:#111;color:#fff;border-color:#111}
+  .btn-amber{background:#ffd166;border-color:#e9b44e}
+  .btn:active::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.08);}
+  .pill{padding:6px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;min-width:44px;text-align:center}
+  .jump{width:74px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px}
+  .toggler{ position:fixed; right:12px; top:12px; background:#111; color:#fff; border:none; border-radius:10px; padding:8px 10px; cursor:pointer; z-index:21 }
+  #zoomSlider{ appearance:none; height:6px; border-radius:999px; background:#e5e7eb; width:160px; margin-left:8px; }
+  #zoomSlider::-webkit-slider-thumb{ appearance:none; width:16px; height:16px; border-radius:999px; background:#111; cursor:pointer; }
+  #zoomSlider::-moz-range-thumb{ width:16px; height:16px; border-radius:999px; background:#111; cursor:pointer }
+  .mascot{margin-top:auto;text-align:center}
+  .mascot img{max-width:140px;height:auto;user-select:none;-webkit-user-drag:none}
+  .badge{ position:absolute; top:8px; right:8px; background:#111; color:#fff; font:500 12px/1 system-ui,Arial; padding:4px 8px; border-radius:999px; pointer-events:none; }
+  .badge.warn{ background:var(--warn) }
+  .num{color:#6b7280; font-size:12px; text-align:center; margin-top:6px; pointer-events:none}
+  .hidden{display:none}
+
+  /* Ajustements UI */
+  .bookModeLabel{ font-size:13px; white-space:nowrap; }
+  #corrSection .btn{ font-size:13px; }
+  #toggleRect,#clear{ font-size:10px; } /* réduits */
+</style>
+</head>
+<body>
+<button id="toggleSide" class="toggler" title="Afficher/masquer le menu">☰</button>
+
+<aside id="side" class="side" aria-label="Outils de lecture">
+  <div class="header"><div class="title">Outils</div></div>
+
+  <div class="section">
+    <div class="row"><strong>Pages</strong></div>
+    <div class="row">
+      <button class="btn" id="prev">◂</button>
+      <span class="pill" id="pageDisp">1</span>
+      <button class="btn" id="next">▸</button>
+      <input id="pageJump" class="jump" type="number" min="1" step="1" placeholder="n°" />
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="row"><strong>Affichage</strong></div>
+    <div class="row">
+      <button class="btn" id="mode1up">1 page</button>
+      <button class="btn" id="mode2up">2 pages</button>
+    </div>
+    <label class="row" style="gap:6px">
+      <input type="checkbox" id="bookMode" />
+      <span class="bookModeLabel">Pair à gauche / impair à droite</span>
+    </label>
+  </div>
+
+  <div class="section">
+    <div class="row"><strong>Zoom</strong></div>
+    <div class="row">
+      <button class="btn" id="zoomOut">–</button>
+      <span class="pill" id="zoomVal">100%</span>
+      <button class="btn" id="zoomIn">+</button>
+      <input id="zoomSlider" type="range" min="30" max="200" value="100" step="1" />
+    </div>
+    <div class="row">
+      <button class="btn btn-amber" id="fitWidth">Adapter à la largeur</button>
+      <button class="btn" id="resetZoom">100%</button>
+    </div>
+  </div>
+
+  <div class="section" id="corrSection">
+    <div class="row"><strong>Corrections</strong></div>
+    <div class="row">
+      <button id="toggleRect" class="btn btn-dark">Locales: OFF</button>
+      <button id="undo" class="btn" title="Revenir en arrière (Ctrl+Z)">↶</button>
+      <button id="clear" class="btn">Effacer</button>
+    </div>
+    <button id="revealAll" class="btn btn-amber" disabled>Préchargement… 0%</button>
+  </div>
+
+  <div class="section" id="linksSection">
+    <div class="row"><strong>Liens</strong></div>
+
+    <!-- Panneau dev -->
+    <div class="row" id="linksControlsDev">
+      <button id="linksReload" class="btn">Recharger</button>
+      <button id="linksDebug" class="btn">Afficher zones (debug)</button>
+    </div>
+
+    <!-- Panneau prof -->
+    <div class="row hidden" id="linksControlsUser">
+      <button id="linksToggle" class="btn">Liens : OFF</button>
+    </div>
+
+    <div class="row" id="linksInfoRow" style="font-size:12px;opacity:.7">
+      <span id="linksInfo">Chargement des liens…</span>
+    </div>
+  </div>
+
+  <div class="mascot"><img src="./mascotte.png" alt="Mascotte FMttn" draggable="false" /></div>
+</aside>
+
+<div class="wrap"><div id="viewport" aria-live="polite" class="flow-1up"></div></div>
+
+<!-- links.js en <script> classique fonctionne aussi en file:// -->
+<script src="./links.js"></script>
+
+<script>
+/*** PARAMS via manifest (root + pages dynamiques) ***/
+let ROOT = "./pages";
+let PAGES_ORDER = [];                 // [1,2,3] ou [{n,doc,corr}]
+const PER_PAGE_PATHS = new Map();     // n -> {doc,corr}
+
+const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
+const MIN_PCT = 30, MAX_PCT = 200;
+
+/*** STATE & REFS ***/
+let layout="1up", bookMode=false, zoomPct=100, drawMode=false;
+let corrReadyCount = 0, revealReady = false;
+let DEBUG_LINKS = false;
+let ROLE = "prof";        // par défaut
+let linksActive = false;
+
+const $viewport=document.getElementById('viewport');
+const $pageDisp=document.getElementById('pageDisp');
+const $pageJump=document.getElementById('pageJump');
+const $zoomVal=document.getElementById('zoomVal');
+const $prev=document.getElementById('prev'), $next=document.getElementById('next');
+const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById('mode2up');
+const $book=document.getElementById('bookMode');
+const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoomOut');
+const $fitW=document.getElementById('fitWidth'), $z100=document.getElementById('resetZoom');
+const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElementById('clear'), $revealAll=document.getElementById('revealAll');
+const $undo=document.getElementById('undo');
+const $slider=document.getElementById('zoomSlider');
+const $linksInfo=document.getElementById('linksInfo');
+const $linksInfoRow=document.getElementById('linksInfoRow');
+const $linksToggle=document.getElementById('linksToggle');
+const $linksControlsDev=document.getElementById('linksControlsDev');
+const $linksControlsUser=document.getElementById('linksControlsUser');
+
+const pages=[];
+let currentIndex=0, firstPageWidth=null;
+
+/* Undo */
+const historyStack=[];
+
+/* spacer pour mode livre */
+const spacer=document.createElement('div'); spacer.className='page spacer';
+const spacerBox=document.createElement('div'); spacerBox.className='box'; spacer.appendChild(spacerBox);
+
+/*** UTILS ***/
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const cssScaleFromPct=()=>!firstPageWidth?1:(zoomPct/100)*(REF_WIDTH_PX/firstPageWidth);
+
+/* Chemins dynamiques */
+function defaultDocPath(n){ return `${ROOT}/page${n}/page${n}.png`; }
+function defaultCorrPath(n){ return `${ROOT}/page${n}/correctionpage${n}.png`; }
+function docPath(n){ return (PER_PAGE_PATHS.get(n)?.doc) || defaultDocPath(n); }
+function corrPath(n){ return (PER_PAGE_PATHS.get(n)?.corr) || defaultCorrPath(n); }
+
+/*** ZOOM ***/
+function applyZoom(){
+  const s=cssScaleFromPct();
+  for(const p of pages){
+    p.box.style.width=Math.round(p.w*s)+'px';
+    p.box.style.height=Math.round(p.h*s)+'px';
+    updateLinkLayerScale(p);
+  }
+  if(pages[0]){
+    spacerBox.style.width  = Math.round(pages[0].w*s)+'px';
+    spacerBox.style.height = Math.round(pages[0].h*s)+'px';
+  }
+  $zoomVal.textContent=`${zoomPct}%`;
+  if($slider) $slider.value=String(zoomPct);
+}
+function fitWidth(){
+  if(!firstPageWidth) return;
+  const vp=$viewport.getBoundingClientRect();
+  const gutter=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gutter'))||18;
+  const targetCssWidth=(layout==='1up')?(vp.width-2):((vp.width-gutter)/2);
+  const desiredCssScale=targetCssWidth/firstPageWidth;
+  const desiredPct=desiredCssScale*100*(firstPageWidth/REF_WIDTH_PX);
+  zoomPct=clamp(Math.round(desiredPct),MIN_PCT,MAX_PCT);
+  applyZoom();
+}
+
+/*** NAV ***/
+function cardsReal(){ return [...document.querySelectorAll('.page:not(.spacer)')]; }
+
+function visiblePageIndex(){
+  const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
+  cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
+  return best.idx;
+}
+
+function labelForSpread(i){
+  if(layout!=='2up'){ return String(pages[i]?.idx || i+1); }
+  if(bookMode){
+    if(i===0) return '0-' + (pages[0]?.idx || 1);
+    const left = (i%2===1)? i : i-1;
+    const right = Math.min(pages.length-1, left+1);
+    return `${pages[left]?.idx}-${pages[right]?.idx}`;
+  } else {
+    const left = i - (i%2);
+    const right = Math.min(pages.length-1, left+1);
+    return `${pages[left]?.idx}-${pages[right]?.idx}`;
+  }
+}
+
+function syncPageUI(){
+  if(!pages.length) return;
+  const i = visiblePageIndex();
+  $pageDisp.textContent = labelForSpread(i);
+  $pageJump.value = String(pages[i]?.idx || i+1);
+}
+
+function gotoIndex(target){
+  const cards=cardsReal(); target = clamp(target,0,cards.length-1);
+  currentIndex=target; syncPageUI(); cards[target].scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function gotoSpread(delta){
+  const cards = cardsReal();
+  if(!cards.length){ return; }
+  let i = visiblePageIndex();
+
+  if(layout!=='2up'){ gotoIndex(i + delta); return; }
+
+  if(bookMode){
+    if(delta>0){
+      if(i===0){ gotoIndex(1); return; }
+      const left = (i%2===1)? i : i-1;
+      gotoIndex( clamp(left + 2, 0, cards.length-1) );
+    } else {
+      if(i===1){ gotoIndex(0); return; }
+      const left = (i%2===1)? i : i-1;
+      gotoIndex( clamp(left - 2, 0, cards.length-1) );
+    }
+  } else {
+    const left = i - (i%2);
+    gotoIndex( clamp(left + 2*delta, 0, cards.length-1) );
+  }
+}
+function updateNavFromScroll(){ currentIndex=visiblePageIndex(); syncPageUI(); }
+
+/*** LIENS ***/
+let LINKS_MAP = window.__LINKS__ || {};
+function setLinksMapFromGlobal(){
+  LINKS_MAP = window.__LINKS__ || {};
+  const pagesWith = Object.keys(LINKS_MAP).length;
+  if ($linksInfo) $linksInfo.textContent = pagesWith ? `${pagesWith} page(s) avec liens • src: links.js` : `Aucun lien chargé`;
+  if(pages.length){ for(const p of pages) mountLinksForPage(p); updateLinksInteractivity(); }
+}
+
+/* suit l’échelle CSS de l’image */
+function updateLinkLayerScale(p){
+  const natW = p.w, natH = p.h;
+  const cssW = parseFloat(getComputedStyle(p.box).width);
+  const cssH = parseFloat(getComputedStyle(p.box).height);
+  const sx = cssW / natW, sy = cssH / natH;
+  p.linksLayer.style.width  = natW + 'px';
+  p.linksLayer.style.height = natH + 'px';
+  p.linksLayer.style.transform = `scale(${sx}, ${sy})`;
+}
+
+/* hotspots */
+function mountLinksForPage(p){
+  if(!p.linksLayer){
+    const layer=document.createElement('div');
+    layer.className='linksLayer';
+    p.linksLayer=layer;
+    p.box.appendChild(layer);
+    p.box.appendChild(p.canDr);
+  }
+  p.linksLayer.innerHTML='';
+  const list = LINKS_MAP[String(p.idx)];
+  if(!list || !list.length){ updateLinkLayerScale(p); return; }
+
+  for(const L of list){
+    const a=document.createElement('a');
+    a.className='link-hotspot';
+
+    const x = (L.xPct/100)*p.w;
+    const y = (L.yPct/100)*p.h;
+    const w = (L.wPct/100)*p.w;
+    const h = (L.hPct/100)*p.h;
+    a.style.left = x+'px';
+    a.style.top  = y+'px';
+    a.style.width  = Math.max(1,w)+'px';
+    a.style.height = Math.max(1,h)+'px';
+
+    if(L.title) a.title=L.title;
+    if(L.kind==='external' && L.href){
+      a.href=L.href; a.target='_blank'; a.rel='noopener';
+    } else if(L.kind==='internal' && L.gotoPage){
+      a.href='#p'+L.gotoPage; a.dataset.goto = String(L.gotoPage);
+      a.addEventListener('click',(e)=>{ e.preventDefault(); if(drawMode) toggleDrawMode(false);
+        const idx = pages.findIndex(pp=>pp.idx===L.gotoPage);
+        if(idx>=0) gotoIndex(idx);
+      });
+    }
+    if(DEBUG_LINKS) a.classList.add('dbg');
+    p.linksLayer.appendChild(a);
+  }
+  updateLinkLayerScale(p);
+}
+
+/* interactivité des liens */
+function updateLinksInteractivity(){
+  for(const p of pages){
+    if(!p.linksLayer) continue;
+    p.linksLayer.classList.toggle('links-blocked', drawMode || !linksActive);
+    p.linksLayer.style.display = linksActive ? 'block' : 'none';
+    p.canDr.style.pointerEvents = drawMode ? 'auto' : 'none';
+  }
+}
+function setLinksActive(on){
+  linksActive = !!on;
+  if (linksActive && drawMode) toggleDrawMode(false);
+  const btn = document.getElementById('linksToggle');
+  if (btn){
+    btn.textContent = 'Liens : ' + (linksActive ? 'ON' : 'OFF');
+    btn.classList.toggle('btn-dark', linksActive);
+  }
+  updateLinksInteractivity();
+}
+
+/*** CORRECTIONS ***/
+function redrawOverlay(p){
+  const ctx=p.canOv.getContext('2d');
+  ctx.clearRect(0,0,p.w,p.h);
+  if(!p.imgCorr) return;
+  const corrW=p.corrNW||p.imgCorr.naturalWidth||p.w;
+  const corrH=p.corrNH||p.imgCorr.naturalHeight||p.h;
+  if(p.showAll){ ctx.drawImage(p.imgCorr,0,0,corrW,corrH,0,0,p.w,p.h); return; }
+  if(!p.zones || !p.zones.length) return;
+  const sX=p.w/corrW, sY=p.h/corrH;
+  for(const r of p.zones){
+    const sx=r.x/sX, sy=r.y/sY, sw=r.w/sX, sh=r.h/sY;
+    ctx.drawImage(p.imgCorr,sx,sy,sw,sh,r.x,r.y,r.w,r.h);
+  }
+}
+function redrawDraft(p,d){
+  const ctx=p.canDr.getContext('2d');
+  ctx.clearRect(0,0,p.w,p.h);
+  if(!d) return;
+  ctx.setLineDash([]); ctx.strokeStyle='#9CA3AF'; ctx.lineWidth=3;
+  const x=d.w>=0?d.x:d.x+d.w, y=d.h>=0?d.y:d.y+d.h;
+  ctx.strokeRect(x,y,Math.abs(d.w),Math.abs(d.h));
+}
+function attachDrawHandlers(p){
+  let draft=null;
+  const toLocal=e=>{ const r=p.canDr.getBoundingClientRect(); const sx=p.w/r.width, sy=p.h/r.height; return {x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy}; };
+  function down(e){ if(!drawMode) return; draft=toLocal(e); draft.w=0; draft.h=0; redrawDraft(p,draft); }
+  function move(e){ if(!drawMode||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
+  function up(){
+    if(!drawMode||!draft) return;
+    const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+d.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
+    draft=null;
+    if(r.w>6 && r.h>6){ p.zones.push(r); historyStack.push({page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
+    redrawDraft(p,null);
+  }
+  p.canDr.addEventListener('mousedown',down);
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',up);
+}
+
+/*** PRÉCHARGEMENT : corrections ***/
+function updateRevealButton(){
+  const pct=Math.round((corrReadyCount/Math.max(1,pages.length))*100);
+  if(corrReadyCount>=pages.length){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout révéler'; }
+  else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${pct}%`; }
+}
+
+/*** BUILD ***/
+function makePage(n, opt){
+  const el=document.createElement('div'); el.className='page';
+  const badge=document.createElement('div'); badge.className='badge'; badge.textContent='Page '+n; el.appendChild(badge);
+  const box=document.createElement('div'); box.className='box'; el.appendChild(box);
+
+  const img=document.createElement('img'); img.alt=`Page ${n}`; img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src= opt?.doc || docPath(n); box.appendChild(img);
+
+  const canOv=document.createElement('canvas'); canOv.className='ov';
+  const canDr=document.createElement('canvas'); canDr.className='dr';
+  box.appendChild(canOv);
+
+  const linksLayer=document.createElement('div'); linksLayer.className='linksLayer'; box.appendChild(linksLayer);
+  box.appendChild(canDr);
+
+  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
+  pages.push(p);
+
+  const corr=new Image(); corr.decoding='async'; corr.loading='eager'; corr.fetchPriority='high';
+  const corrSrc = opt?.corr || corrPath(n);
+  function onCorrLoaded(){ p.imgCorr=corr; p.corrNW=corr.naturalWidth||0; p.corrNH=corr.naturalHeight||0; corrReadyCount++; updateRevealButton(); }
+  corr.addEventListener('load',()=>{ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); });
+  corr.addEventListener('error',()=>{ corrReadyCount++; updateRevealButton(); });
+  corr.src=corrSrc;
+  if(corr.complete){ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); }
+
+  img.addEventListener('error',()=>{ el.classList.add('missing'); const warn=document.createElement('div'); warn.className='badge warn'; warn.textContent='Fichier manquant'; el.appendChild(warn); });
+  img.addEventListener('load',()=>{ 
+    p.w=img.naturalWidth; p.h=img.naturalHeight;
+    canOv.width=canDr.width=p.w; canOv.height=canDr.height=p.h;
+    if(!firstPageWidth) firstPageWidth=p.w;
+    applyZoom();
+    redrawOverlay(p); redrawDraft(p,null);
+    attachDrawHandlers(p);
+    mountLinksForPage(p);
+    updateLinksInteractivity();
+    updateLinkLayerScale(p);
+  });
+
+  const cap=document.createElement('div'); cap.className='num'; cap.textContent=n; el.appendChild(cap);
+  return el;
+}
+
+function mount1up(){ $viewport.className='flow-1up'; $viewport.innerHTML=''; for(const p of pages){ $viewport.appendChild(p.elPage); } }
+function mount2up(){
+  $viewport.className='flow-2up'; $viewport.innerHTML='';
+  if (bookMode){
+    if(pages[0]){
+      const s1=document.createElement('div'); s1.className='spread';
+      s1.appendChild(spacer); s1.appendChild(pages[0].elPage); $viewport.appendChild(s1);
+    }
+    for (let i=1;i<pages.length;i+=2){
+      const sp=document.createElement('div'); sp.className='spread';
+      sp.appendChild(pages[i].elPage);
+      if(pages[i+1]) sp.appendChild(pages[i+1].elPage);
+      $viewport.appendChild(sp);
+    }
+  } else {
+    for (let i=0;i<pages.length;i+=2){
+      const sp=document.createElement('div'); sp.className='spread';
+      sp.appendChild(pages[i].elPage);
+      if(pages[i+1]) sp.appendChild(pages[i+1].elPage);
+      $viewport.appendChild(sp);
+    }
+  }
+}
+function rebuild(){ if(layout==='1up') mount1up(); else mount2up(); applyZoom(); updateNavFromScroll(); }
+
+/*** RÔLE (dev / prof) ***/
+function detectRole(){
+  const qs = new URLSearchParams(location.search);
+  const urlRole = qs.get('role');
+  const saved = localStorage.getItem('fmttnRole');
+  ROLE = (urlRole || saved || 'prof').toLowerCase();
+  localStorage.setItem('fmttnRole', ROLE);
+
+  $linksControlsDev.classList.toggle('hidden', ROLE !== 'dev');
+  $linksControlsUser.classList.toggle('hidden', ROLE !== 'prof');
+  if (ROLE === 'prof') {
+    if ($linksInfoRow) $linksInfoRow.classList.add('hidden');
+    setLinksActive(false);
+  } else {
+    setLinksActive(true);
+  }
+}
+
+/*** MANIFEST — fetch si possible, sinon inline ***/
+async function loadManifestAndBuild(){
+  let m = null;
+
+  // 1) essai via fetch (OK en http://localhost)
+  try{
+    const res = await fetch('./manifest.json?_=' + Date.now(), {cache:'no-store'});
+    if(res.ok) m = await res.json();
+  }catch(_e){ /* on tombera sur l’inline */ }
+
+  // 2) fallback inline (OK en file://)
+  if(!m){
+    const el = document.getElementById('manifestInline');
+    if(el){
+      try{ m = JSON.parse(el.textContent.trim()); }catch(_e){}
+    }
+  }
+
+  // 3) défaut ultime
+  if(!m){ m = { root: "./pages", pages: [1,2,3,4] }; }
+
+  ROOT = m.root || "./pages";
+  PAGES_ORDER = Array.isArray(m.pages) ? m.pages : [];
+
+  PER_PAGE_PATHS.clear();
+  for(const item of PAGES_ORDER){
+    if(item && typeof item === 'object' && typeof item.n === 'number'){
+      PER_PAGE_PATHS.set(item.n, {doc:item.doc, corr:item.corr});
+    }
+  }
+
+  for (const item of PAGES_ORDER){
+    const n   = (typeof item === 'number') ? item : item.n;
+    const opt = (typeof item === 'object')  ? {doc:item.doc, corr:item.corr} : undefined;
+    $viewport.appendChild(makePage(n, opt));
+  }
+
+  updateRevealButton();
+  rebuild();
+}
+
+/*** INIT ***/
+window.addEventListener('load', async ()=>{
+  // panneau
+  let collapsed=false; const setCollapsed=c=>{ collapsed=c; document.querySelector('.side').classList.toggle('collapsed',c); document.documentElement.style.setProperty('--panelW', c?'0px':'270px'); };
+  document.getElementById('toggleSide').addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
+
+  detectRole();
+
+  // links.js déjà chargé en haut : on synchronise la map
+  setLinksMapFromGlobal();
+
+  // construit depuis manifest (fetch->inline)
+  await loadManifestAndBuild();
+  toggleDrawMode(false);
+
+  /* ZOOM */
+  $zin.addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
+  $zout.addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
+  $fitW.addEventListener('click',fitWidth);
+  $z100.addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
+  $slider.addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
+
+  /* Affichage & nav */
+  $mode1.addEventListener('click',()=>{layout='1up'; rebuild();});
+  $mode2.addEventListener('click',()=>{layout='2up'; rebuild();});
+  $book.addEventListener('change',e=>{bookMode=e.target.checked; if(layout==='2up') rebuild(); syncPageUI();});
+
+  $prev.addEventListener('click',()=>gotoSpread(-1));
+  $next.addEventListener('click',()=>gotoSpread(+1));
+  $pageJump.addEventListener('change',()=> {
+    const want=parseInt($pageJump.value,10);
+    const idx = pages.findIndex(p=>p.idx===want);
+    if(!Number.isNaN(want) && idx>=0) gotoIndex(idx);
+  });
+
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft') gotoSpread(-1);
+    if(e.key==='ArrowRight') gotoSpread(+1);
+    if(e.key==='+'||e.key==='='){ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); }
+    if(e.key==='-'||e.key==='_'){ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){ doUndo(); }
+  });
+  window.addEventListener('scroll',()=>requestAnimationFrame(updateNavFromScroll));
+
+  /* Corrections */
+  document.getElementById('toggleRect').addEventListener('click',()=>{
+    const willOn = !drawMode;
+    toggleDrawMode(willOn);
+    if (willOn) setLinksActive(false);
+  });
+  document.getElementById('clear').addEventListener('click',()=>{
+    for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
+    historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler';
+  });
+
+  const $undoBtn=document.getElementById('undo');
+  $undoBtn.addEventListener('click', doUndo);
+  $undoBtn.disabled = true;
+  function doUndo(){
+    const allShown=!!pages[0]?.showAll;
+    if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
+    const last=historyStack.pop(); if(!last){ $undoBtn.disabled=true; return; }
+    const {page,rect}=last; const i=page.zones.lastIndexOf(rect); if(i!==-1) page.zones.splice(i,1); redrawOverlay(page); $undoBtn.disabled=historyStack.length===0;
+  }
+
+  document.getElementById('revealAll').addEventListener('click',()=>{
+    if(!revealReady) return;
+    const reveal=!pages[0]?.showAll;
+    for(const p of pages){ p.showAll=reveal; redrawOverlay(p); }
+    document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler';
+  });
+
+  /* Liens dev/prof */
+  const $btnReload = document.getElementById('linksReload');
+  if ($btnReload) $btnReload.addEventListener('click', ()=>{ setLinksMapFromGlobal(); alert('Liens rechargés depuis links.js'); });
+  const $btnDbg = document.getElementById('linksDebug');
+  if ($btnDbg) $btnDbg.addEventListener('click', ()=>{
+    DEBUG_LINKS=!DEBUG_LINKS;
+    for(const p of pages){
+      if(!p.linksLayer) continue;
+      [...p.linksLayer.querySelectorAll('.link-hotspot')].forEach(a=>a.classList.toggle('dbg',DEBUG_LINKS));
+    }
+  });
+  if ($linksToggle) $linksToggle.addEventListener('click', ()=> setLinksActive(!linksActive));
+
+  $viewport.addEventListener('contextmenu',e=>e.preventDefault());
+});
+
+/*** MODE DESSIN ***/
+function toggleDrawMode(on){
+  drawMode = on;
+  $toggleRect.textContent='Locales: ' + (drawMode?'ON':'OFF'); // sans espace avant :
+  $toggleRect.classList.toggle('btn-dark',drawMode);
+  updateLinksInteractivity();
+}
+</script>
+</body>
+</html>
