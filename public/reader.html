@@ -4,15 +4,6 @@
 <meta charset="utf-8" />
 <title>FMttn — Liseuse PNG + Corrections</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-<!-- MANIFEST INLINE (fallback pour file://). Mets ici tes pages quand tu ouvres en double-clic. -->
-<script id="manifestInline" type="application/json">
-{
-  "root": "./pages",
-  "pages": [1,2,3,4,5]
-}
-</script>
-
 <style>
   :root{ --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444; }
   *{box-sizing:border-box}
@@ -30,7 +21,7 @@
   .page{ position:relative; display:block; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.08);
          border-radius:8px; width:fit-content; }
   .page.missing{ outline:3px solid var(--warn); }
-  .spacer{ background:transparent; box-shadow:none; border:1px dashed #e5e7eb }
+  .spacer{background:transparent; box-shadow:none; border:1px dashed #e5e7eb}
   .box{position:relative; display:inline-block; will-change:width,height}
   .page img{display:block;max-width:100%;height:auto;user-select:none;-webkit-user-drag:none}
 
@@ -38,17 +29,11 @@
   .ov{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1}
   .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3}
 
-  /* Couche des liens */
-  .linksLayer{
-    position:absolute; left:0; top:0;
-    width:0; height:0;
-    z-index:2; pointer-events:auto;
-    transform-origin: top left;
-  }
+  /* couche des liens : coordonnées en px natifs + scale CSS */
+  .linksLayer{ position:absolute; left:0; top:0; width:0; height:0; z-index:2; pointer-events:auto; transform-origin:top left; }
   .linksLayer.links-blocked{ pointer-events:none; }
   .link-hotspot{ position:absolute; display:block; outline:none; border:0; background:transparent; }
   .linksLayer:not(.links-blocked) .link-hotspot{ cursor:pointer; }
-  .link-hotspot:focus{ outline:2px dashed transparent; outline-offset:2px; }
   .link-hotspot.dbg{ background:rgba(255,200,0,.18); border:1px dashed rgba(255,200,0,.55); }
 
   /* panneau */
@@ -75,13 +60,9 @@
   .mascot img{max-width:140px;height:auto;user-select:none;-webkit-user-drag:none}
   .badge{ position:absolute; top:8px; right:8px; background:#111; color:#fff; font:500 12px/1 system-ui,Arial; padding:4px 8px; border-radius:999px; pointer-events:none; }
   .badge.warn{ background:var(--warn) }
-  .num{display:none!important}
-  .hidden{display:none}
 
-  /* Ajustements UI */
-  .bookModeLabel{ font-size:13px; white-space:nowrap; }
-  #corrSection .btn{ font-size:13px; }
-  #toggleRect,#clear{ font-size:10px; } /* réduits */
+  /* on masque la légende numérotée */
+  .num{display:none!important}
 </style>
 </head>
 <body>
@@ -107,8 +88,7 @@
       <button class="btn" id="mode2up">2 pages</button>
     </div>
     <label class="row" style="gap:6px">
-      <input type="checkbox" id="bookMode" />
-      <span class="bookModeLabel">Pair à gauche / impair à droite</span>
+      <input type="checkbox" id="bookMode" /> Pair à gauche / impair à droite
     </label>
   </div>
 
@@ -126,31 +106,23 @@
     </div>
   </div>
 
-  <div class="section" id="corrSection">
+  <div class="section">
     <div class="row"><strong>Corrections</strong></div>
     <div class="row">
-      <button id="toggleRect" class="btn btn-dark">Locales: OFF</button>
+      <button id="toggleRect" class="btn btn-dark">Locales : OFF</button>
       <button id="undo" class="btn" title="Revenir en arrière (Ctrl+Z)">↶</button>
       <button id="clear" class="btn">Effacer</button>
     </div>
     <button id="revealAll" class="btn btn-amber" disabled>Préchargement… 0%</button>
   </div>
 
-  <div class="section" id="linksSection">
+  <div class="section">
     <div class="row"><strong>Liens</strong></div>
-
-    <!-- Panneau dev -->
-    <div class="row" id="linksControlsDev">
+    <div class="row">
       <button id="linksReload" class="btn">Recharger</button>
       <button id="linksDebug" class="btn">Afficher zones (debug)</button>
     </div>
-
-    <!-- Panneau prof -->
-    <div class="row hidden" id="linksControlsUser">
-      <button id="linksToggle" class="btn">Liens : OFF</button>
-    </div>
-
-    <div class="row" id="linksInfoRow" style="font-size:12px;opacity:.7">
+    <div class="row" style="font-size:12px;opacity:.7">
       <span id="linksInfo">Chargement des liens…</span>
     </div>
   </div>
@@ -160,14 +132,16 @@
 
 <div class="wrap"><div id="viewport" aria-live="polite" class="flow-1up"></div></div>
 
-<!-- links.js en <script> classique fonctionne aussi en file:// -->
-<script src="./links.js"></script>
+<!-- Option liens via links.js (facultatif) -->
+<script src="./links.js" defer></script>
 
 <script>
-/*** PARAMS via manifest (root + pages dynamiques) ***/
-let ROOT = "./pages";
-let PAGES_ORDER = [];                 // [1,2,3] ou [{n,doc,corr}]
-const PER_PAGE_PATHS = new Map();     // n -> {doc,corr}
+/*** PARAMS ***/
+const ROOT = "./pages";              // dossier des pages
+const LINKS_JSON_URL = "./links.json"; // fallback si pas de links.js
+
+const docPath  = n => `${ROOT}/page${n}/page${n}.png`;
+const corrPath = n => `${ROOT}/page${n}/correctionpage${n}.png`;
 
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
@@ -176,8 +150,6 @@ const MIN_PCT = 30, MAX_PCT = 200;
 let layout="1up", bookMode=false, zoomPct=100, drawMode=false;
 let corrReadyCount = 0, revealReady = false;
 let DEBUG_LINKS = false;
-let ROLE = "prof";        // par défaut
-let linksActive = false;
 
 const $viewport=document.getElementById('viewport');
 const $pageDisp=document.getElementById('pageDisp');
@@ -190,14 +162,11 @@ const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoo
 const $fitW=document.getElementById('fitWidth'), $z100=document.getElementById('resetZoom');
 const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElementById('clear'), $revealAll=document.getElementById('revealAll');
 const $undo=document.getElementById('undo');
+const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
 const $linksInfo=document.getElementById('linksInfo');
-const $linksInfoRow=document.getElementById('linksInfoRow');
-const $linksToggle=document.getElementById('linksToggle');
-const $linksControlsDev=document.getElementById('linksControlsDev');
-const $linksControlsUser=document.getElementById('linksControlsUser');
 
-const pages=[];
+const pages=[]; // objets pages
 let currentIndex=0, firstPageWidth=null;
 
 /* Undo */
@@ -211,12 +180,6 @@ const spacerBox=document.createElement('div'); spacerBox.className='box'; spacer
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const cssScaleFromPct=()=>!firstPageWidth?1:(zoomPct/100)*(REF_WIDTH_PX/firstPageWidth);
 
-/* Chemins dynamiques */
-function defaultDocPath(n){ return `${ROOT}/page${n}/page${n}.png`; }
-function defaultCorrPath(n){ return `${ROOT}/page${n}/correctionpage${n}.png`; }
-function docPath(n){ return (PER_PAGE_PATHS.get(n)?.doc) || defaultDocPath(n); }
-function corrPath(n){ return (PER_PAGE_PATHS.get(n)?.corr) || defaultCorrPath(n); }
-
 /*** ZOOM ***/
 function applyZoom(){
   const s=cssScaleFromPct();
@@ -226,8 +189,8 @@ function applyZoom(){
     updateLinkLayerScale(p);
   }
   if(pages[0]){
-    spacerBox.style.width  = Math.round(pages[0].w*s)+'px';
-    spacerBox.style.height = Math.round(pages[0].h*s)+'px';
+    spacerBox.style.width=Math.round(pages[0].w*s)+'px';
+    spacerBox.style.height=Math.round(pages[0].h*s)+'px';
   }
   $zoomVal.textContent=`${zoomPct}%`;
   if($slider) $slider.value=String(zoomPct);
@@ -245,73 +208,45 @@ function fitWidth(){
 
 /*** NAV ***/
 function cardsReal(){ return [...document.querySelectorAll('.page:not(.spacer)')]; }
-
-function visiblePageIndex(){
-  const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
-  cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
-  return best.idx;
-}
-
-function labelForSpread(i){
-  if(layout!=='2up'){ return String(pages[i]?.idx || i+1); }
-  if(bookMode){
-    if(i===0) return '0-' + (pages[0]?.idx || 1);
-    const left = (i%2===1)? i : i-1;
-    const right = Math.min(pages.length-1, left+1);
-    return `${pages[left]?.idx}-${pages[right]?.idx}`;
-  } else {
-    const left = i - (i%2);
-    const right = Math.min(pages.length-1, left+1);
-    return `${pages[left]?.idx}-${pages[right]?.idx}`;
-  }
-}
-
-function syncPageUI(){
-  if(!pages.length) return;
-  const i = visiblePageIndex();
-  $pageDisp.textContent = labelForSpread(i);
-  $pageJump.value = String(pages[i]?.idx || i+1);
-}
-
+function syncPageUI(){ $pageDisp.textContent=String(currentIndex+1); $pageJump.value=String(currentIndex+1); }
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
   currentIndex=target; syncPageUI(); cards[target].scrollIntoView({behavior:'smooth',block:'start'});
 }
-
-function gotoSpread(delta){
-  const cards = cardsReal();
-  if(!cards.length){ return; }
-  let i = visiblePageIndex();
-
-  if(layout!=='2up'){ gotoIndex(i + delta); return; }
-
-  if(bookMode){
-    if(delta>0){
-      if(i===0){ gotoIndex(1); return; }
-      const left = (i%2===1)? i : i-1;
-      gotoIndex( clamp(left + 2, 0, cards.length-1) );
-    } else {
-      if(i===1){ gotoIndex(0); return; }
-      const left = (i%2===1)? i : i-1;
-      gotoIndex( clamp(left - 2, 0, cards.length-1) );
-    }
-  } else {
-    const left = i - (i%2);
-    gotoIndex( clamp(left + 2*delta, 0, cards.length-1) );
-  }
+function goto(by){
+  const cards=cardsReal(); const top=window.scrollY+4; let best={idx:0,dy:1e9};
+  cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const y=r.top+window.scrollY; const dy=Math.abs(y-top); if(dy<best.dy) best={idx:i,dy}; });
+  gotoIndex(best.idx+by);
 }
-function updateNavFromScroll(){ currentIndex=visiblePageIndex(); syncPageUI(); }
+function updateNavFromScroll(){
+  const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
+  cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
+  currentIndex=best.idx; syncPageUI();
+}
 
 /*** LIENS ***/
-let LINKS_MAP = window.__LINKS__ || {};
-function setLinksMapFromGlobal(){
-  LINKS_MAP = window.__LINKS__ || {};
-  const pagesWith = Object.keys(LINKS_MAP).length;
-  if ($linksInfo) $linksInfo.textContent = pagesWith ? `${pagesWith} page(s) avec liens • src: links.js` : `Aucun lien chargé`;
-  if(pages.length){ for(const p of pages) mountLinksForPage(p); updateLinksInteractivity(); }
+let LINKS_MAP = {};
+function loadLinksFromGlobalThenJson(){
+  // 1) links.js (global)
+  if (window.__LINKS__ && typeof window.__LINKS__ === 'object'){
+    LINKS_MAP = window.__LINKS__;
+    $linksInfo.textContent = `${Object.keys(LINKS_MAP).length} page(s) avec liens • src: links.js`;
+    for (const p of pages) mountLinksForPage(p);
+    updateLinksInteractivity();
+    return;
+  }
+  // 2) fallback links.json
+  fetch(LINKS_JSON_URL + '?v=' + Date.now(), {cache:'no-store'})
+    .then(r=>r.ok?r.text():Promise.reject(r.status))
+    .then(txt=>JSON.parse(txt.replace(/^\uFEFF/,'').trim()))
+    .then(data=>{
+      LINKS_MAP = data||{};
+      $linksInfo.textContent = `${Object.keys(LINKS_MAP).length} page(s) avec liens • src: links.json`;
+      for (const p of pages) mountLinksForPage(p);
+      updateLinksInteractivity();
+    })
+    .catch(()=>{ $linksInfo.textContent='Aucun lien chargé'; LINKS_MAP={}; });
 }
-
-/* suit l’échelle CSS de l’image */
 function updateLinkLayerScale(p){
   const natW = p.w, natH = p.h;
   const cssW = parseFloat(getComputedStyle(p.box).width);
@@ -321,8 +256,6 @@ function updateLinkLayerScale(p){
   p.linksLayer.style.height = natH + 'px';
   p.linksLayer.style.transform = `scale(${sx}, ${sy})`;
 }
-
-/* hotspots */
 function mountLinksForPage(p){
   if(!p.linksLayer){
     const layer=document.createElement('div');
@@ -334,53 +267,33 @@ function mountLinksForPage(p){
   p.linksLayer.innerHTML='';
   const list = LINKS_MAP[String(p.idx)];
   if(!list || !list.length){ updateLinkLayerScale(p); return; }
-
   for(const L of list){
     const a=document.createElement('a');
     a.className='link-hotspot';
-
-    const x = (L.xPct/100)*p.w;
-    const y = (L.yPct/100)*p.h;
-    const w = (L.wPct/100)*p.w;
-    const h = (L.hPct/100)*p.h;
-    a.style.left = x+'px';
-    a.style.top  = y+'px';
-    a.style.width  = Math.max(1,w)+'px';
-    a.style.height = Math.max(1,h)+'px';
-
+    const x=(L.xPct/100)*p.w, y=(L.yPct/100)*p.h, w=(L.wPct/100)*p.w, h=(L.hPct/100)*p.h;
+    a.style.left=x+'px'; a.style.top=y+'px'; a.style.width=Math.max(1,w)+'px'; a.style.height=Math.max(1,h)+'px';
     if(L.title) a.title=L.title;
-    if(L.kind==='external' && L.href){
-      a.href=L.href; a.target='_blank'; a.rel='noopener';
-    } else if(L.kind==='internal' && L.gotoPage){
-      a.href='#p'+L.gotoPage; a.dataset.goto = String(L.gotoPage);
-      a.addEventListener('click',(e)=>{ e.preventDefault(); if(drawMode) toggleDrawMode(false);
-        const idx = pages.findIndex(pp=>pp.idx===L.gotoPage);
-        if(idx>=0) gotoIndex(idx);
-      });
+    if(L.kind==='external' && L.href){ a.href=L.href; a.target='_blank'; a.rel='noopener'; }
+    else if(L.kind==='internal' && L.gotoPage){
+      a.href='#p'+L.gotoPage; a.dataset.goto=String(L.gotoPage);
+      a.addEventListener('click',(e)=>{ e.preventDefault(); if(drawMode) toggleDrawMode(false); gotoIndex(parseInt(a.dataset.goto,10)-1); });
     }
     if(DEBUG_LINKS) a.classList.add('dbg');
     p.linksLayer.appendChild(a);
   }
   updateLinkLayerScale(p);
 }
-
-/* interactivité des liens */
 function updateLinksInteractivity(){
   for(const p of pages){
     if(!p.linksLayer) continue;
-    p.linksLayer.classList.toggle('links-blocked', drawMode || !linksActive);
-    p.linksLayer.style.display = linksActive ? 'block' : 'none';
+    p.linksLayer.classList.toggle('links-blocked', drawMode);
     p.canDr.style.pointerEvents = drawMode ? 'auto' : 'none';
   }
 }
-function setLinksActive(on){
-  linksActive = !!on;
-  if (linksActive && drawMode) toggleDrawMode(false);
-  const btn = document.getElementById('linksToggle');
-  if (btn){
-    btn.textContent = 'Liens : ' + (linksActive ? 'ON' : 'OFF');
-    btn.classList.toggle('btn-dark', linksActive);
-  }
+function toggleDrawMode(on){
+  drawMode = on;
+  $toggleRect.textContent='Locales : ' + (drawMode?'ON':'OFF');
+  $toggleRect.classList.toggle('btn-dark',drawMode);
   updateLinksInteractivity();
 }
 
@@ -414,7 +327,7 @@ function attachDrawHandlers(p){
   function move(e){ if(!drawMode||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
   function up(){
     if(!drawMode||!draft) return;
-    const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+d.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
+    const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+draft.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
     draft=null;
     if(r.w>6 && r.h>6){ p.zones.push(r); historyStack.push({page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
     redrawDraft(p,null);
@@ -426,18 +339,18 @@ function attachDrawHandlers(p){
 
 /*** PRÉCHARGEMENT : corrections ***/
 function updateRevealButton(){
-  const pct=Math.round((corrReadyCount/Math.max(1,pages.length))*100);
-  if(corrReadyCount>=pages.length){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout révéler'; }
-  else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${pct}%`; }
+  const pct=Math.round((corrReadyCount/pages.length)*100);
+  if(corrReadyCount>=pages.length && pages.length>0){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout révéler'; }
+  else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${isFinite(pct)?pct:0}%`; }
 }
 
 /*** BUILD ***/
-function makePage(n, opt){
+function makePage(n){
   const el=document.createElement('div'); el.className='page';
   const badge=document.createElement('div'); badge.className='badge'; badge.textContent='Page '+n; el.appendChild(badge);
   const box=document.createElement('div'); box.className='box'; el.appendChild(box);
 
-  const img=document.createElement('img'); img.alt=`Page ${n}`; img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src= opt?.doc || docPath(n); box.appendChild(img);
+  const img=document.createElement('img'); img.alt=`Page ${n}`; img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src=docPath(n); box.appendChild(img);
 
   const canOv=document.createElement('canvas'); canOv.className='ov';
   const canDr=document.createElement('canvas'); canDr.className='dr';
@@ -450,11 +363,10 @@ function makePage(n, opt){
   pages.push(p);
 
   const corr=new Image(); corr.decoding='async'; corr.loading='eager'; corr.fetchPriority='high';
-  const corrSrc = opt?.corr || corrPath(n);
   function onCorrLoaded(){ p.imgCorr=corr; p.corrNW=corr.naturalWidth||0; p.corrNH=corr.naturalHeight||0; corrReadyCount++; updateRevealButton(); }
   corr.addEventListener('load',()=>{ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); });
   corr.addEventListener('error',()=>{ corrReadyCount++; updateRevealButton(); });
-  corr.src=corrSrc;
+  corr.src=corrPath(n);
   if(corr.complete){ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); }
 
   img.addEventListener('error',()=>{ el.classList.add('missing'); const warn=document.createElement('div'); warn.className='badge warn'; warn.textContent='Fichier manquant'; el.appendChild(warn); });
@@ -470,6 +382,7 @@ function makePage(n, opt){
     updateLinkLayerScale(p);
   });
 
+  const cap=document.createElement('div'); cap.className='num'; cap.textContent=n; el.appendChild(cap);
   return el;
 }
 
@@ -477,181 +390,100 @@ function mount1up(){ $viewport.className='flow-1up'; $viewport.innerHTML=''; for
 function mount2up(){
   $viewport.className='flow-2up'; $viewport.innerHTML='';
   if (bookMode){
-    if(pages[0]){
-      const s1=document.createElement('div'); s1.className='spread';
-      s1.appendChild(spacer); s1.appendChild(pages[0].elPage); $viewport.appendChild(s1);
-    }
-    for (let i=1;i<pages.length;i+=2){
-      const sp=document.createElement('div'); sp.className='spread';
-      sp.appendChild(pages[i].elPage);
-      if(pages[i+1]) sp.appendChild(pages[i+1].elPage);
-      $viewport.appendChild(sp);
-    }
+    const s1=document.createElement('div'); s1.className='spread'; s1.appendChild(spacer); s1.appendChild(pages[0].elPage); $viewport.appendChild(s1);
+    for (let i=1;i<pages.length;i+=2){ const sp=document.createElement('div'); sp.className='spread'; sp.appendChild(pages[i].elPage); if(pages[i+1]) sp.appendChild(pages[i+1].elPage); $viewport.appendChild(sp); }
   } else {
-    for (let i=0;i<pages.length;i+=2){
-      const sp=document.createElement('div'); sp.className='spread';
-      sp.appendChild(pages[i].elPage);
-      if(pages[i+1]) sp.appendChild(pages[i+1].elPage);
-      $viewport.appendChild(sp);
-    }
+    for (let i=0;i<pages.length;i+=2){ const sp=document.createElement('div'); sp.className='spread'; sp.appendChild(pages[i].elPage); if(pages[i+1]) sp.appendChild(pages[i+1].elPage); $viewport.appendChild(sp); }
   }
 }
 function rebuild(){ if(layout==='1up') mount1up(); else mount2up(); applyZoom(); updateNavFromScroll(); }
 
-/*** RÔLE (dev / prof) ***/
-function detectRole(){
-  const qs = new URLSearchParams(location.search);
-  const urlRole = qs.get('role');
-  const saved = localStorage.getItem('fmttnRole');
-  ROLE = (urlRole || saved || 'prof').toLowerCase();
-  localStorage.setItem('fmttnRole', ROLE);
-
-  $linksControlsDev.classList.toggle('hidden', ROLE !== 'dev');
-  $linksControlsUser.classList.toggle('hidden', ROLE !== 'prof');
-  if (ROLE === 'prof') {
-    if ($linksInfoRow) $linksInfoRow.classList.add('hidden');
-    setLinksActive(false);
-  } else {
-    setLinksActive(true);
-  }
+/*** DÉCOUVERTE AUTO DES PAGES ***/
+function testImage(url){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>resolve(true);
+    img.onerror=()=>resolve(false);
+    img.src=url+'?v='+Date.now();
+  });
 }
-
-/*** MANIFEST — fetch si possible, sinon inline ***/
-async function loadManifestAndBuild(){
-  let m = null;
-
-  // 1) essai via fetch (OK en http://localhost)
+async function discoverPages(max=500){
+  const list=[];
+  for(let n=1;n<=max;n++){
+    const ok = await testImage(docPath(n));
+    if(!ok) break;           // arrêt à la première manquante
+    list.push(n);
+  }
+  return list;
+}
+async function getPagesList(){
+  // manifest.json prioritaire s’il existe
   try{
-    const res = await fetch('./manifest.json?_=' + Date.now(), {cache:'no-store'});
-    if(res.ok) m = await res.json();
-  }catch(_e){ /* on tombera sur l’inline */ }
-
-  // 2) fallback inline (OK en file://)
-  if(!m){
-    const el = document.getElementById('manifestInline');
-    if(el){
-      try{ m = JSON.parse(el.textContent.trim()); }catch(_e){}
+    const res=await fetch('./manifest.json?v='+Date.now(),{cache:'no-store'});
+    if(res.ok){
+      const m=await res.json();
+      if(m && Array.isArray(m.pages) && m.pages.length) return m.pages;
     }
-  }
-
-  // 3) défaut ultime
-  if(!m){ m = { root: "./pages", pages: [1,2,3,4,5] }; }
-
-  ROOT = m.root || "./pages";
-  PAGES_ORDER = Array.isArray(m.pages) ? m.pages : [];
-
-  PER_PAGE_PATHS.clear();
-  for(const item of PAGES_ORDER){
-    if(item && typeof item === 'object' && typeof item.n === 'number'){
-      PER_PAGE_PATHS.set(item.n, {doc:item.doc, corr:item.corr});
-    }
-  }
-
-  for (const item of PAGES_ORDER){
-    const n   = (typeof item === 'number') ? item : item.n;
-    const opt = (typeof item === 'object')  ? {doc:item.doc, corr:item.corr} : undefined;
-    $viewport.appendChild(makePage(n, opt));
-  }
-
-  updateRevealButton();
-  rebuild();
+  }catch(_){}
+  // sinon découverte auto
+  return await discoverPages(500);
 }
 
 /*** INIT ***/
 window.addEventListener('load', async ()=>{
-  // panneau
-  let collapsed=false; const setCollapsed=c=>{ collapsed=c; document.querySelector('.side').classList.toggle('collapsed',c); document.documentElement.style.setProperty('--panelW', c?'0px':'270px'); };
-  document.getElementById('toggleSide').addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
+  let collapsed=false; const setCollapsed=c=>{ collapsed=c; $side.classList.toggle('collapsed',c); document.documentElement.style.setProperty('--panelW', c?'0px':'270px'); };
+  $toggleSide.addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
 
-  detectRole();
-
-  // links.js déjà chargé en haut : on synchronise la map
-  setLinksMapFromGlobal();
-
-  // construit depuis manifest (fetch->inline)
-  await loadManifestAndBuild();
+  const pagesList = await getPagesList();
+  for(const n of pagesList) $viewport.appendChild(makePage(n));
+  updateRevealButton();
+  rebuild();
   toggleDrawMode(false);
 
-  /* ZOOM */
-  $zin.addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
-  $zout.addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
-  $fitW.addEventListener('click',fitWidth);
-  $z100.addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
-  $slider.addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
+  loadLinksFromGlobalThenJson();
 
-  /* Affichage & nav */
+  document.getElementById('linksReload').addEventListener('click', ()=>{ loadLinksFromGlobalThenJson(); alert('Liens rechargés'); });
+  document.getElementById('linksDebug').addEventListener('click', ()=>{ DEBUG_LINKS=!DEBUG_LINKS; for(const p of pages){ if(!p.linksLayer) continue; [...p.linksLayer.querySelectorAll('.link-hotspot')].forEach(a=>a.classList.toggle('dbg',DEBUG_LINKS)); } });
+
   $mode1.addEventListener('click',()=>{layout='1up'; rebuild();});
   $mode2.addEventListener('click',()=>{layout='2up'; rebuild();});
-  $book.addEventListener('change',e=>{bookMode=e.target.checked; if(layout==='2up') rebuild(); syncPageUI();});
+  $book.addEventListener('change',e=>{bookMode=e.target.checked; if(layout==='2up') rebuild();});
 
-  $prev.addEventListener('click',()=>gotoSpread(-1));
-  $next.addEventListener('click',()=>gotoSpread(+1));
-  $pageJump.addEventListener('change',()=> {
-    const want=parseInt($pageJump.value,10);
-    const idx = pages.findIndex(p=>p.idx===want);
-    if(!Number.isNaN(want) && idx>=0) gotoIndex(idx);
-  });
+  document.getElementById('zoomIn').addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
+  document.getElementById('zoomOut').addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
+  document.getElementById('fitWidth').addEventListener('click',fitWidth);
+  document.getElementById('resetZoom').addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
+  document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
+  document.getElementById('prev').addEventListener('click',()=>goto(-1));
+  document.getElementById('next').addEventListener('click',()=>goto(+1));
+  document.getElementById('pageJump').addEventListener('change',()=>{ const n=parseInt($pageJump.value,10); if(!Number.isNaN(n)) gotoIndex(n-1); });
   document.addEventListener('keydown',e=>{
-    if(e.key==='ArrowLeft') gotoSpread(-1);
-    if(e.key==='ArrowRight') gotoSpread(+1);
+    if(e.key==='ArrowLeft') goto(-1);
+    if(e.key==='ArrowRight') goto(+1);
     if(e.key==='+'||e.key==='='){ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); }
     if(e.key==='-'||e.key==='_'){ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){ doUndo(); }
   });
   window.addEventListener('scroll',()=>requestAnimationFrame(updateNavFromScroll));
 
-  /* Corrections */
-  document.getElementById('toggleRect').addEventListener('click',()=>{
-    const willOn = !drawMode;
-    toggleDrawMode(willOn);
-    if (willOn) setLinksActive(false);
-  });
-  document.getElementById('clear').addEventListener('click',()=>{
-    for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
-    historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler';
-  });
+  document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
+  document.getElementById('clear').addEventListener('click',()=>{ for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); } historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler'; });
 
-  const $undoBtn=document.getElementById('undo');
-  $undoBtn.addEventListener('click', doUndo);
-  $undoBtn.disabled = true;
+  $undo.addEventListener('click', doUndo);
+  $undo.disabled = true;
   function doUndo(){
     const allShown=!!pages[0]?.showAll;
     if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
-    const last=historyStack.pop(); if(!last){ $undoBtn.disabled=true; return; }
-    const {page,rect}=last; const i=page.zones.lastIndexOf(rect); if(i!==-1) page.zones.splice(i,1); redrawOverlay(page); $undoBtn.disabled=historyStack.length===0;
+    const last=historyStack.pop(); if(!last){ $undo.disabled=true; return; }
+    const {page,rect}=last; const i=page.zones.lastIndexOf(rect); if(i!==-1) page.zones.splice(i,1); redrawOverlay(page); $undo.disabled=historyStack.length===0;
   }
 
-  document.getElementById('revealAll').addEventListener('click',()=>{
-    if(!revealReady) return;
-    const reveal=!pages[0]?.showAll;
-    for(const p of pages){ p.showAll=reveal; redrawOverlay(p); }
-    document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler';
-  });
-
-  /* Liens dev/prof */
-  const $btnReload = document.getElementById('linksReload');
-  if ($btnReload) $btnReload.addEventListener('click', ()=>{ setLinksMapFromGlobal(); alert('Liens rechargés depuis links.js'); });
-  const $btnDbg = document.getElementById('linksDebug');
-  if ($btnDbg) $btnDbg.addEventListener('click', ()=>{
-    DEBUG_LINKS=!DEBUG_LINKS;
-    for(const p of pages){
-      if(!p.linksLayer) continue;
-      [...p.linksLayer.querySelectorAll('.link-hotspot')].forEach(a=>a.classList.toggle('dbg',DEBUG_LINKS));
-    }
-  });
-  if ($linksToggle) $linksToggle.addEventListener('click', ()=> setLinksActive(!linksActive));
+  document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler'; });
 
   $viewport.addEventListener('contextmenu',e=>e.preventDefault());
 });
-
-/*** MODE DESSIN ***/
-function toggleDrawMode(on){
-  drawMode = on;
-  $toggleRect.textContent='Locales: ' + (drawMode?'ON':'OFF'); // sans espace avant :
-  $toggleRect.classList.toggle('btn-dark',drawMode);
-  updateLinksInteractivity();
-}
 </script>
 </body>
 </html>
+
