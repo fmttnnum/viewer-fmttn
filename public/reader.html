@@ -535,7 +535,7 @@ async function loadManifestAndBuild(){
   }
 
   // 3) défaut ultime
-  if(!m){ m = { root: "./pages", pages: [1,2,3,4] }; }
+  if(!m){ m = { root: "./pages", pages: [1,2,3,4,5] }; }
 
   ROOT = m.root || "./pages";
   PAGES_ORDER = Array.isArray(m.pages) ? m.pages : [];
