@@ -137,11 +137,15 @@
 
 <script>
 /*** PARAMS ***/
-const ROOT = "./pages";              // dossier des pages
-const LINKS_JSON_URL = "./links.json"; // fallback si pas de links.js
+const DOCS_ROOT = "./docs";
+const CORRECTIONS_ROOT = "./corrections/monDoc";
+const LINKS_JSON_URL = "./links.json";
 
-const docPath  = n => `${ROOT}/page${n}/page${n}.png`;
-const corrPath = n => `${ROOT}/page${n}/correctionpage${n}.png`;
+const fileName = n =>
+  `Altx_1a_Corrections_version Numabib${n === 1 ? "" : n}.png`;
+
+const docPath = n => `${DOCS_ROOT}/${fileName(n)}`;
+const corrPath = n => `${CORRECTIONS_ROOT}/${fileName(n)}`;
 
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
