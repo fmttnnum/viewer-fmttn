@@ -35,6 +35,7 @@
   .link-hotspot{ position:absolute; display:block; outline:none; border:0; background:transparent; }
   .linksLayer:not(.links-blocked) .link-hotspot{ cursor:pointer; }
   .link-hotspot.dbg{ background:rgba(255,200,0,.18); border:1px dashed rgba(255,200,0,.55); }
+  .link-hotspot.selected{background:rgba(220,38,38,.2);border:3px solid #dc2626;box-sizing:border-box}
   .linksLayer.links-hidden,.linksLayer.links-blocked{ pointer-events:none; }
   .linkEditor{display:none;border-top:1px solid #e5e7eb;padding-top:8px;margin-top:2px}
   .linkEditor.active{display:flex;flex-direction:column;gap:8px}
@@ -138,9 +139,9 @@
       <input id="linkTarget" class="linkField" type="text" placeholder="https://…" />
       <input id="linkTitle" class="linkField" type="text" placeholder="Titre facultatif" />
       <button id="linkDraw" class="btn btn-dark">Tracer la zone du lien</button>
-      <button id="linkDeleteLast" class="btn">Supprimer le dernier lien</button>
+      <button id="linkDeleteSelected" class="btn" disabled>Supprimer le lien sélectionné</button>
       <button id="linkExport" class="btn btn-amber">Télécharger links.js</button>
-      <div id="linkEditorInfo" class="editorHint">Encode l’adresse, puis trace un rectangle sur le QR code.</div>
+      <div id="linkEditorInfo" class="editorHint">Pour retirer un ancien lien : affiche les liens, puis clique sur sa zone.</div>
     </div>
   </div>
 
@@ -192,6 +193,7 @@ const $linkKind=document.getElementById('linkKind');
 const $linkTarget=document.getElementById('linkTarget');
 const $linkTitle=document.getElementById('linkTitle');
 const $linkDraw=document.getElementById('linkDraw');
+const $linkDeleteSelected=document.getElementById('linkDeleteSelected');
 const $linkEditorInfo=document.getElementById('linkEditorInfo');
 
 const pages=[]; // objets pages
@@ -199,7 +201,7 @@ let currentIndex=0, firstPageWidth=null;
 
 /* Undo */
 const historyStack=[];
-const linkHistory=[];
+let selectedLink=null;
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -296,7 +298,7 @@ function mountLinksForPage(p){
   p.linksLayer.innerHTML='';
   const list = LINKS_MAP[String(p.idx)];
   if(!list || !list.length){ updateLinkLayerScale(p); return; }
-  for(const L of list){
+  for(const [linkIndex,L] of list.entries()){
     const a=document.createElement('a');
     a.className='link-hotspot';
     const x=(L.xPct/100)*p.w, y=(L.yPct/100)*p.h, w=(L.wPct/100)*p.w, h=(L.hPct/100)*p.h;
@@ -305,9 +307,17 @@ function mountLinksForPage(p){
     if(L.kind==='external' && L.href){ a.href=L.href; a.target='_blank'; a.rel='noopener'; }
     else if(L.kind==='internal' && L.gotoPage){
       a.href='#p'+L.gotoPage; a.dataset.goto=String(L.gotoPage);
-      a.addEventListener('click',(e)=>{ e.preventDefault(); if(drawMode) toggleDrawMode(false); gotoIndex(parseInt(a.dataset.goto,10)-1); });
+      a.addEventListener('click',(e)=>{ e.preventDefault(); if(LINK_EDITOR) return; if(drawMode) toggleDrawMode(false); gotoIndex(parseInt(a.dataset.goto,10)-1); });
     }
-    if(LINK_EDITOR) a.classList.add('dbg');
+    if(LINK_EDITOR){
+      a.classList.add('dbg');
+      a.addEventListener('click',(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        selectEncodedLink(String(p.idx),linkIndex);
+      });
+      if(selectedLink?.key===String(p.idx) && selectedLink.index===linkIndex) a.classList.add('selected');
+    }
     p.linksLayer.appendChild(a);
   }
   updateLinkLayerScale(p);
@@ -319,6 +329,34 @@ function updateLinksInteractivity(){
     p.linksLayer.classList.toggle('links-blocked', drawMode || linkDrawMode);
     p.canDr.style.pointerEvents = (drawMode || linkDrawMode) ? 'auto' : 'none';
   }
+}
+function selectEncodedLink(key,index){
+  const list=LINKS_MAP[key]||[];
+  if(!list[index]) return;
+  selectedLink={key,index};
+  for(const p of pages) if(p.linksLayer) mountLinksForPage(p);
+  $linkDeleteSelected.disabled=false;
+  const L=list[index];
+  const destination=L.kind==='internal'?`la page ${L.gotoPage}`:(L.href||'ce lien');
+  $linkEditorInfo.textContent=`Lien sélectionné sur la page ${key} vers ${destination}.`;
+}
+function clearSelectedLink(){
+  selectedLink=null;
+  if($linkDeleteSelected) $linkDeleteSelected.disabled=true;
+}
+function deleteSelectedLink(){
+  if(!selectedLink){
+    $linkEditorInfo.textContent='Affiche les liens, puis clique sur la zone à supprimer.';
+    return;
+  }
+  const {key,index}=selectedLink;
+  const list=LINKS_MAP[key]||[];
+  if(!list[index]){ clearSelectedLink(); return; }
+  list.splice(index,1);
+  if(!list.length) delete LINKS_MAP[key];
+  clearSelectedLink();
+  const p=pages.find(x=>String(x.idx)===key); if(p) mountLinksForPage(p);
+  $linkEditorInfo.textContent=`Lien supprimé de la page ${key}. Tu peux maintenant en tracer un nouveau.`;
 }
 function toggleLinks(on){
   linksVisible=!!on;
@@ -356,7 +394,8 @@ function addEncodedLink(p,r){
   else link.gotoPage=parseInt(target,10);
   const title=$linkTitle.value.trim(); if(title) link.title=title;
   const key=String(p.idx); if(!Array.isArray(LINKS_MAP[key])) LINKS_MAP[key]=[];
-  LINKS_MAP[key].push(link); linkHistory.push({key,link});
+  LINKS_MAP[key].push(link);
+  clearSelectedLink();
   mountLinksForPage(p);
   linkDrawMode=false; $linkDraw.textContent='Tracer la zone du lien';
   $linkEditorInfo.textContent=`Lien ajouté sur la page ${p.idx}.`;
@@ -538,13 +577,7 @@ window.addEventListener('load', async ()=>{
       $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte à rendre cliquable.';
       updateLinksInteractivity();
     });
-    document.getElementById('linkDeleteLast').addEventListener('click',()=>{
-      const last=linkHistory.pop();
-      if(!last){ $linkEditorInfo.textContent='Aucun nouveau lien à supprimer pendant cette séance.'; return; }
-      const list=LINKS_MAP[last.key]||[]; const i=list.lastIndexOf(last.link); if(i>=0) list.splice(i,1);
-      const p=pages.find(x=>String(x.idx)===last.key); if(p) mountLinksForPage(p);
-      $linkEditorInfo.textContent=`Dernier lien de la page ${last.key} supprimé.`;
-    });
+    $linkDeleteSelected.addEventListener('click',deleteSelectedLink);
     document.getElementById('linkExport').addEventListener('click',exportLinksFile);
   }
 
@@ -589,5 +622,3 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
-
-
