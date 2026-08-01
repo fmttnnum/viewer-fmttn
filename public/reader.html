@@ -312,11 +312,15 @@ async function ensureCorrection(p){
   if(p.corrRendering) return p.corrRendering;
   p.corrRendering=(async()=>{
     const page=await pdfCorr.getPage(p.idx);
-    const vp=page.getViewport({scale:RENDER_SCALE});
-    p.corrCanvas.width=Math.ceil(vp.width);
-    p.corrCanvas.height=Math.ceil(vp.height);
+    /*
+      IMPORTANT : on réutilise exactement le viewport du PDF sans corrections.
+      Les deux rendus ont ainsi la même matrice, la même origine et les mêmes
+      dimensions en pixels. Cela évite tout décalage du calque corrigé.
+    */
+    p.corrCanvas.width=p.w;
+    p.corrCanvas.height=p.h;
     await page.render({
-      canvasContext:p.corrCanvas.getContext("2d"),viewport:vp
+      canvasContext:p.corrCanvas.getContext("2d"),viewport:p.viewport
     }).promise;
     p.corrRendered=true;
     return true;
@@ -332,7 +336,7 @@ async function redrawOverlay(p){
   if(!p.showAll && !p.zones.length) return;
   if(!await ensureCorrection(p)) return;
   if(p.showAll){
-    ctx.drawImage(p.corrCanvas,0,0,p.w,p.h);
+    ctx.drawImage(p.corrCanvas,0,0);
     return;
   }
   for(const r of p.zones){
@@ -406,7 +410,7 @@ async function makePage(n){
   canOv.width=canDr.width=w;
   canOv.height=canDr.height=h;
   const p={idx:n,box,elPage:el,docCanvas,corrCanvas,canOv,canDr,
-    linksLayer,w,h,zones:[],showAll:false,docRendered:false,
+    linksLayer,viewport:vp,w,h,zones:[],showAll:false,docRendered:false,
     corrRendered:false,linksLoaded:false,linkCount:0};
   pages.push(p);
   if(!firstPageWidth) firstPageWidth=w;
@@ -577,4 +581,5 @@ init();
 </script>
 </body>
 </html>
+
 
