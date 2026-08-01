@@ -83,7 +83,7 @@
       <button class="btn" id="prev">◂</button>
       <span class="pill" id="pageDisp">1</span>
       <button class="btn" id="next">▸</button>
-      <input id="pageJump" class="jump" type="number" min="1" step="1" placeholder="n°" />
+      <input id="pageJump" class="jump" type="number" min="0" step="1" placeholder="n°" />
     </div>
   </div>
 
@@ -164,6 +164,7 @@ const corrPath = n => `${CORRECTIONS_ROOT}/${fileName(n)}`;
 
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
+const FRONT_MATTER_PAGES = 2;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
@@ -207,6 +208,10 @@ const spacerBox=document.createElement('div'); spacerBox.className='box'; spacer
 /*** UTILS ***/
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const cssScaleFromPct=()=>!firstPageWidth?1:(zoomPct/100)*(REF_WIDTH_PX/firstPageWidth);
+const displayNumberFromIndex=index=>index===0?'0':index===1?'':String(index-1);
+const displayNumberFromPhysical=n=>displayNumberFromIndex(n-1);
+const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxième de couverture':`page ${n-FRONT_MATTER_PAGES}`;
+const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
 
 /*** ZOOM ***/
 function applyZoom(){
@@ -236,7 +241,12 @@ function fitWidth(){
 
 /*** NAV ***/
 function cardsReal(){ return [...document.querySelectorAll('.page:not(.spacer)')]; }
-function syncPageUI(){ $pageDisp.textContent=String(currentIndex+1); $pageJump.value=String(currentIndex+1); }
+function syncPageUI(){
+  const displayed=displayNumberFromIndex(currentIndex);
+  $pageDisp.textContent=displayed;
+  $pageDisp.title=currentIndex===0?'Couverture':currentIndex===1?'Deuxième de couverture':`Page ${displayed}`;
+  $pageJump.value=displayed;
+}
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
   currentIndex=target; syncPageUI(); cards[target].scrollIntoView({behavior:'smooth',block:'start'});
@@ -295,7 +305,7 @@ function mountLinksForPage(p){
     if(L.kind==='external' && L.href){ a.href=L.href; a.target='_blank'; a.rel='noopener'; }
     else if(L.kind==='internal' && L.gotoPage){
       a.href='#p'+L.gotoPage; a.dataset.goto=String(L.gotoPage);
-      a.addEventListener('click',(e)=>{ e.preventDefault(); if(LINK_EDITOR) return; if(drawMode) toggleDrawMode(false); gotoIndex(parseInt(a.dataset.goto,10)-1); });
+      a.addEventListener('click',(e)=>{ e.preventDefault(); if(LINK_EDITOR) return; if(drawMode) toggleDrawMode(false); gotoIndex(bookPageToIndex(parseInt(a.dataset.goto,10))); });
     }
     if(LINK_EDITOR){
       a.classList.add('dbg');
@@ -326,7 +336,7 @@ function selectEncodedLink(key,index){
   $linkDeleteSelected.disabled=false;
   const L=list[index];
   const destination=L.kind==='internal'?`la page ${L.gotoPage}`:(L.href||'ce lien');
-  $linkEditorInfo.textContent=`Lien sélectionné sur la page ${key} vers ${destination}.`;
+  $linkEditorInfo.textContent=`Lien sélectionné sur la ${pageLabelFromPhysical(+key)} vers ${destination}.`;
 }
 function clearSelectedLink(){
   selectedLink=null;
@@ -345,7 +355,7 @@ function deleteSelectedLink(){
   clearSelectedLink();
   const p=pages.find(x=>String(x.idx)===key); if(p) mountLinksForPage(p);
   toggleLinks(true);
-  $linkEditorInfo.textContent=`Lien supprimé de la page ${key}. Tu peux maintenant en tracer un nouveau.`;
+  $linkEditorInfo.textContent=`Lien supprimé de la ${pageLabelFromPhysical(+key)}. Tu peux maintenant en tracer un nouveau.`;
 }
 function toggleLinks(on){
   linksVisible=!!on;
@@ -393,7 +403,7 @@ function addEncodedLink(p,r){
   toggleLinks(true);
   $linkTarget.focus();
   const total=Object.values(LINKS_MAP).reduce((sum,list)=>sum+(Array.isArray(list)?list.length:0),0);
-  $linkEditorInfo.textContent=`Lien ajouté sur la page ${p.idx}. ${total} lien(s) seront enregistrés dans le prochain fichier links.json.`;
+  $linkEditorInfo.textContent=`Lien ajouté sur la ${pageLabelFromPhysical(p.idx)}. ${total} lien(s) seront enregistrés dans le prochain fichier links.json.`;
 }
 
 function exportLinksFile(){
@@ -458,10 +468,11 @@ function updateRevealButton(){
 /*** BUILD ***/
 function makePage(n){
   const el=document.createElement('div'); el.className='page';
-  const badge=document.createElement('div'); badge.className='badge'; badge.textContent='Page '+n; el.appendChild(badge);
+  const pageLabel=pageLabelFromPhysical(n);
+  const badge=document.createElement('div'); badge.className='badge'; badge.textContent=pageLabel[0].toUpperCase()+pageLabel.slice(1); el.appendChild(badge);
   const box=document.createElement('div'); box.className='box'; el.appendChild(box);
 
-  const img=document.createElement('img'); img.alt=`Page ${n}`; img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src=docPath(n); box.appendChild(img);
+  const img=document.createElement('img'); img.alt=pageLabel[0].toUpperCase()+pageLabel.slice(1); img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src=docPath(n); box.appendChild(img);
 
   const canOv=document.createElement('canvas'); canOv.className='ov';
   const canDr=document.createElement('canvas'); canDr.className='dr';
@@ -493,7 +504,7 @@ function makePage(n){
     updateLinkLayerScale(p);
   });
 
-  const cap=document.createElement('div'); cap.className='num'; cap.textContent=n; el.appendChild(cap);
+  const cap=document.createElement('div'); cap.className='num'; cap.textContent=displayNumberFromPhysical(n); el.appendChild(cap);
   return el;
 }
 
@@ -564,7 +575,8 @@ window.addEventListener('load', async ()=>{
         try{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol)) throw new Error(); }
         catch(_){ $linkEditorInfo.textContent='Entre une adresse complète commençant par https://'; return; }
       }else{
-        const n=parseInt(target,10); if(!Number.isInteger(n)||n<1||n>pages.length){ $linkEditorInfo.textContent=`Entre un numéro de page entre 1 et ${pages.length}.`; return; }
+        const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
+        const n=parseInt(target,10); if(!Number.isInteger(n)||n<0||n>lastBookPage){ $linkEditorInfo.textContent=`Entre un numéro de page entre 0 et ${lastBookPage}.`; return; }
       }
       toggleDrawMode(false); toggleLinks(false); linkDrawMode=true;
       $linkDraw.textContent='Trace maintenant la zone sur la page';
@@ -587,7 +599,12 @@ window.addEventListener('load', async ()=>{
 
   document.getElementById('prev').addEventListener('click',()=>goto(-1));
   document.getElementById('next').addEventListener('click',()=>goto(+1));
-  document.getElementById('pageJump').addEventListener('change',()=>{ const n=parseInt($pageJump.value,10); if(!Number.isNaN(n)) gotoIndex(n-1); });
+  document.getElementById('pageJump').addEventListener('change',()=>{
+    const n=parseInt($pageJump.value,10);
+    const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
+    if(Number.isInteger(n) && n>=0 && n<=lastBookPage) gotoIndex(bookPageToIndex(n));
+    else syncPageUI();
+  });
   document.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft') goto(-1);
     if(e.key==='ArrowRight') goto(+1);
