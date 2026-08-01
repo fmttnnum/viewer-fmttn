@@ -1,0 +1,38 @@
+{
+  "7": [
+    {
+      "kind": "external",
+      "xPct": 20.7044,
+      "yPct": 55.1826,
+      "wPct": 8.4101,
+      "hPct": 4.2345,
+      "href": "https://genqrco.de/ZU9sDc2"
+    }
+  ],
+  "8": [
+    {
+      "kind": "internal",
+      "xPct": 6.0731,
+      "yPct": 7.9194,
+      "wPct": 85.023,
+      "hPct": 2.0358,
+      "gotoPage": 11
+    },
+    {
+      "kind": "internal",
+      "xPct": 5.9579,
+      "yPct": 10.0366,
+      "wPct": 85.023,
+      "hPct": 2.2801,
+      "gotoPage": 11
+    },
+    {
+      "kind": "internal",
+      "xPct": 5.9579,
+      "yPct": 12.3982,
+      "wPct": 85.023,
+      "hPct": 1.9544,
+      "gotoPage": 14
+    }
+  ]
+}
