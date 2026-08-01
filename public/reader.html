@@ -344,6 +344,7 @@ function deleteSelectedLink(){
   if(!list.length) delete LINKS_MAP[key];
   clearSelectedLink();
   const p=pages.find(x=>String(x.idx)===key); if(p) mountLinksForPage(p);
+  toggleLinks(true);
   $linkEditorInfo.textContent=`Lien supprimé de la page ${key}. Tu peux maintenant en tracer un nouveau.`;
 }
 function toggleLinks(on){
@@ -385,9 +386,14 @@ function addEncodedLink(p,r){
   LINKS_MAP[key].push(link);
   clearSelectedLink();
   mountLinksForPage(p);
-  linkDrawMode=false; $linkDraw.textContent='Tracer la zone du lien';
-  $linkEditorInfo.textContent=`Lien ajouté sur la page ${p.idx}.`;
-  updateLinksInteractivity();
+  linkDrawMode=false;
+  $linkDraw.textContent='Tracer la zone du lien';
+  $linkTarget.value='';
+  $linkTitle.value='';
+  toggleLinks(true);
+  $linkTarget.focus();
+  const total=Object.values(LINKS_MAP).reduce((sum,list)=>sum+(Array.isArray(list)?list.length:0),0);
+  $linkEditorInfo.textContent=`Lien ajouté sur la page ${p.idx}. ${total} lien(s) seront enregistrés dans le prochain fichier links.json.`;
 }
 
 function exportLinksFile(){
@@ -546,7 +552,7 @@ window.addEventListener('load', async ()=>{
   toggleDrawMode(false);
 
   loadLinksFromJson();
-  toggleLinks(false);
+  toggleLinks(LINK_EDITOR);
   $linksToggle.addEventListener('click',()=>toggleLinks(!linksVisible));
 
   if(LINK_EDITOR){
@@ -610,4 +616,5 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
 
