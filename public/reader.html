@@ -35,6 +35,11 @@
   .link-hotspot{ position:absolute; display:block; outline:none; border:0; background:transparent; }
   .linksLayer:not(.links-blocked) .link-hotspot{ cursor:pointer; }
   .link-hotspot.dbg{ background:rgba(255,200,0,.18); border:1px dashed rgba(255,200,0,.55); }
+  .linksLayer.links-hidden,.linksLayer.links-blocked{ pointer-events:none; }
+  .linkEditor{display:none;border-top:1px solid #e5e7eb;padding-top:8px;margin-top:2px}
+  .linkEditor.active{display:flex;flex-direction:column;gap:8px}
+  .linkField{width:100%;padding:7px 8px;border:1px solid #d1d5db;border-radius:8px;background:#fff}
+  .editorHint{font-size:12px;line-height:1.35;opacity:.75}
 
   /* panneau */
   .side{ position:fixed; top:12px; right:12px; bottom:12px; width:var(--panelW); background:#fff; border:1px solid #e5e7eb;
@@ -119,11 +124,23 @@
   <div class="section">
     <div class="row"><strong>Liens</strong></div>
     <div class="row">
-      <button id="linksReload" class="btn">Recharger</button>
-      <button id="linksDebug" class="btn">Afficher zones (debug)</button>
+      <button id="linksToggle" class="btn btn-amber">Afficher les liens</button>
     </div>
     <div class="row" style="font-size:12px;opacity:.7">
       <span id="linksInfo">Chargement des liens…</span>
+    </div>
+    <div id="linkEditor" class="linkEditor">
+      <strong>Encoder un lien</strong>
+      <select id="linkKind" class="linkField">
+        <option value="external">Lien Internet</option>
+        <option value="internal">Page de la liseuse</option>
+      </select>
+      <input id="linkTarget" class="linkField" type="text" placeholder="https://…" />
+      <input id="linkTitle" class="linkField" type="text" placeholder="Titre facultatif" />
+      <button id="linkDraw" class="btn btn-dark">Tracer la zone du lien</button>
+      <button id="linkDeleteLast" class="btn">Supprimer le dernier lien</button>
+      <button id="linkExport" class="btn btn-amber">Télécharger links.js</button>
+      <div id="linkEditorInfo" class="editorHint">Encode l’adresse, puis trace un rectangle sur le QR code.</div>
     </div>
   </div>
 
@@ -151,9 +168,9 @@ const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, zoomPct=100, drawMode=false;
+let layout="1up", bookMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
 let corrReadyCount = 0, revealReady = false;
-let DEBUG_LINKS = false;
+const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
 
 const $viewport=document.getElementById('viewport');
 const $pageDisp=document.getElementById('pageDisp');
@@ -169,12 +186,20 @@ const $undo=document.getElementById('undo');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
 const $linksInfo=document.getElementById('linksInfo');
+const $linksToggle=document.getElementById('linksToggle');
+const $linkEditor=document.getElementById('linkEditor');
+const $linkKind=document.getElementById('linkKind');
+const $linkTarget=document.getElementById('linkTarget');
+const $linkTitle=document.getElementById('linkTitle');
+const $linkDraw=document.getElementById('linkDraw');
+const $linkEditorInfo=document.getElementById('linkEditorInfo');
 
 const pages=[]; // objets pages
 let currentIndex=0, firstPageWidth=null;
 
 /* Undo */
 const historyStack=[];
+const linkHistory=[];
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -282,7 +307,7 @@ function mountLinksForPage(p){
       a.href='#p'+L.gotoPage; a.dataset.goto=String(L.gotoPage);
       a.addEventListener('click',(e)=>{ e.preventDefault(); if(drawMode) toggleDrawMode(false); gotoIndex(parseInt(a.dataset.goto,10)-1); });
     }
-    if(DEBUG_LINKS) a.classList.add('dbg');
+    if(LINK_EDITOR) a.classList.add('dbg');
     p.linksLayer.appendChild(a);
   }
   updateLinkLayerScale(p);
@@ -290,15 +315,61 @@ function mountLinksForPage(p){
 function updateLinksInteractivity(){
   for(const p of pages){
     if(!p.linksLayer) continue;
-    p.linksLayer.classList.toggle('links-blocked', drawMode);
-    p.canDr.style.pointerEvents = drawMode ? 'auto' : 'none';
+    p.linksLayer.classList.toggle('links-hidden', !linksVisible);
+    p.linksLayer.classList.toggle('links-blocked', drawMode || linkDrawMode);
+    p.canDr.style.pointerEvents = (drawMode || linkDrawMode) ? 'auto' : 'none';
   }
+}
+function toggleLinks(on){
+  linksVisible=!!on;
+  if(linksVisible){
+    toggleDrawMode(false);
+    linkDrawMode=false;
+    if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
+  }
+  $linksToggle.textContent=linksVisible?'Masquer les liens':'Afficher les liens';
+  $linksToggle.classList.toggle('btn-dark',linksVisible);
+  updateLinksInteractivity();
 }
 function toggleDrawMode(on){
   drawMode = on;
+  if(drawMode){
+    linksVisible=false;
+    linkDrawMode=false;
+    $linksToggle.textContent='Afficher les liens';
+    $linksToggle.classList.remove('btn-dark');
+  }
   $toggleRect.textContent='Locales : ' + (drawMode?'ON':'OFF');
   $toggleRect.classList.toggle('btn-dark',drawMode);
   updateLinksInteractivity();
+}
+
+function addEncodedLink(p,r){
+  const target=$linkTarget.value.trim();
+  const kind=$linkKind.value;
+  const link={
+    kind,
+    xPct:+((r.x/p.w)*100).toFixed(4), yPct:+((r.y/p.h)*100).toFixed(4),
+    wPct:+((r.w/p.w)*100).toFixed(4), hPct:+((r.h/p.h)*100).toFixed(4)
+  };
+  if(kind==='external') link.href=target;
+  else link.gotoPage=parseInt(target,10);
+  const title=$linkTitle.value.trim(); if(title) link.title=title;
+  const key=String(p.idx); if(!Array.isArray(LINKS_MAP[key])) LINKS_MAP[key]=[];
+  LINKS_MAP[key].push(link); linkHistory.push({key,link});
+  mountLinksForPage(p);
+  linkDrawMode=false; $linkDraw.textContent='Tracer la zone du lien';
+  $linkEditorInfo.textContent=`Lien ajouté sur la page ${p.idx}.`;
+  updateLinksInteractivity();
+}
+
+function exportLinksFile(){
+  const ordered={}; Object.keys(LINKS_MAP).sort((a,b)=>+a-+b).forEach(k=>{ if(LINKS_MAP[k]?.length) ordered[k]=LINKS_MAP[k]; });
+  const content='window.__LINKS__ = '+JSON.stringify(ordered,null,2)+';\n';
+  const url=URL.createObjectURL(new Blob([content],{type:'text/javascript;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download='links.js'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  $linkEditorInfo.textContent='Le nouveau fichier links.js a été téléchargé.';
 }
 
 /*** CORRECTIONS ***/
@@ -327,13 +398,16 @@ function redrawDraft(p,d){
 function attachDrawHandlers(p){
   let draft=null;
   const toLocal=e=>{ const r=p.canDr.getBoundingClientRect(); const sx=p.w/r.width, sy=p.h/r.height; return {x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy}; };
-  function down(e){ if(!drawMode) return; draft=toLocal(e); draft.w=0; draft.h=0; redrawDraft(p,draft); }
-  function move(e){ if(!drawMode||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
+  function down(e){ if(!drawMode&&!linkDrawMode) return; e.preventDefault(); draft=toLocal(e); draft.w=0; draft.h=0; redrawDraft(p,draft); }
+  function move(e){ if((!drawMode&&!linkDrawMode)||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
   function up(){
-    if(!drawMode||!draft) return;
+    if((!drawMode&&!linkDrawMode)||!draft) return;
     const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+draft.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
     draft=null;
-    if(r.w>6 && r.h>6){ p.zones.push(r); historyStack.push({page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
+    if(r.w>6 && r.h>6){
+      if(linkDrawMode) addEncodedLink(p,r);
+      else { p.zones.push(r); historyStack.push({page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
+    }
     redrawDraft(p,null);
   }
   p.canDr.addEventListener('mousedown',down);
@@ -445,9 +519,34 @@ window.addEventListener('load', async ()=>{
   toggleDrawMode(false);
 
   loadLinksFromGlobalThenJson();
+  toggleLinks(false);
+  $linksToggle.addEventListener('click',()=>toggleLinks(!linksVisible));
 
-  document.getElementById('linksReload').addEventListener('click', ()=>{ loadLinksFromGlobalThenJson(); alert('Liens rechargés'); });
-  document.getElementById('linksDebug').addEventListener('click', ()=>{ DEBUG_LINKS=!DEBUG_LINKS; for(const p of pages){ if(!p.linksLayer) continue; [...p.linksLayer.querySelectorAll('.link-hotspot')].forEach(a=>a.classList.toggle('dbg',DEBUG_LINKS)); } });
+  if(LINK_EDITOR){
+    $linkEditor.classList.add('active');
+    $linkKind.addEventListener('change',()=>{ $linkTarget.placeholder=$linkKind.value==='external'?'https://…':'Numéro de page'; });
+    $linkDraw.addEventListener('click',()=>{
+      const target=$linkTarget.value.trim();
+      if($linkKind.value==='external'){
+        try{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol)) throw new Error(); }
+        catch(_){ $linkEditorInfo.textContent='Entre une adresse complète commençant par https://'; return; }
+      }else{
+        const n=parseInt(target,10); if(!Number.isInteger(n)||n<1||n>pages.length){ $linkEditorInfo.textContent=`Entre un numéro de page entre 1 et ${pages.length}.`; return; }
+      }
+      toggleDrawMode(false); toggleLinks(false); linkDrawMode=true;
+      $linkDraw.textContent='Trace maintenant la zone sur la page';
+      $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte à rendre cliquable.';
+      updateLinksInteractivity();
+    });
+    document.getElementById('linkDeleteLast').addEventListener('click',()=>{
+      const last=linkHistory.pop();
+      if(!last){ $linkEditorInfo.textContent='Aucun nouveau lien à supprimer pendant cette séance.'; return; }
+      const list=LINKS_MAP[last.key]||[]; const i=list.lastIndexOf(last.link); if(i>=0) list.splice(i,1);
+      const p=pages.find(x=>String(x.idx)===last.key); if(p) mountLinksForPage(p);
+      $linkEditorInfo.textContent=`Dernier lien de la page ${last.key} supprimé.`;
+    });
+    document.getElementById('linkExport').addEventListener('click',exportLinksFile);
+  }
 
   $mode1.addEventListener('click',()=>{layout='1up'; rebuild();});
   $mode2.addEventListener('click',()=>{layout='2up'; rebuild();});
@@ -490,4 +589,5 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
 
