@@ -313,14 +313,15 @@ async function ensureCorrection(p){
   p.corrRendering=(async()=>{
     const page=await pdfCorr.getPage(p.idx);
     /*
-      IMPORTANT : on réutilise exactement le viewport du PDF sans corrections.
-      Les deux rendus ont ainsi la même matrice, la même origine et les mêmes
-      dimensions en pixels. Cela évite tout décalage du calque corrigé.
+      Chaque page doit conserver son propre viewport : celui-ci contient aussi
+      l'origine interne (CropBox/MediaBox) du PDF. Réutiliser le viewport de
+      l'autre document décale le contenu, même si les pages ont la même taille.
     */
-    p.corrCanvas.width=p.w;
-    p.corrCanvas.height=p.h;
+    const corrViewport=page.getViewport({scale:RENDER_SCALE});
+    p.corrCanvas.width=Math.ceil(corrViewport.width);
+    p.corrCanvas.height=Math.ceil(corrViewport.height);
     await page.render({
-      canvasContext:p.corrCanvas.getContext("2d"),viewport:p.viewport
+      canvasContext:p.corrCanvas.getContext("2d"),viewport:corrViewport
     }).promise;
     p.corrRendered=true;
     return true;
@@ -336,11 +337,16 @@ async function redrawOverlay(p){
   if(!p.showAll && !p.zones.length) return;
   if(!await ensureCorrection(p)) return;
   if(p.showAll){
-    ctx.drawImage(p.corrCanvas,0,0);
+    ctx.drawImage(p.corrCanvas,0,0,p.corrCanvas.width,p.corrCanvas.height,
+      0,0,p.w,p.h);
     return;
   }
+  const scaleX=p.corrCanvas.width/p.w;
+  const scaleY=p.corrCanvas.height/p.h;
   for(const r of p.zones){
-    ctx.drawImage(p.corrCanvas,r.x,r.y,r.w,r.h,r.x,r.y,r.w,r.h);
+    ctx.drawImage(p.corrCanvas,
+      r.x*scaleX,r.y*scaleY,r.w*scaleX,r.h*scaleY,
+      r.x,r.y,r.w,r.h);
   }
 }
 function redrawDraft(p,d){
@@ -581,5 +587,6 @@ init();
 </script>
 </body>
 </html>
+
 
 
