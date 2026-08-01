@@ -140,7 +140,7 @@
       <input id="linkTitle" class="linkField" type="text" placeholder="Titre facultatif" />
       <button id="linkDraw" class="btn btn-dark">Tracer la zone du lien</button>
       <button id="linkDeleteSelected" class="btn" disabled>Supprimer le lien sélectionné</button>
-      <button id="linkExport" class="btn btn-amber">Télécharger links.js</button>
+      <button id="linkExport" class="btn btn-amber">Télécharger links.json</button>
       <div id="linkEditorInfo" class="editorHint">Pour retirer un ancien lien : affiche les liens, puis clique sur sa zone.</div>
     </div>
   </div>
@@ -149,9 +149,6 @@
 </aside>
 
 <div class="wrap"><div id="viewport" aria-live="polite" class="flow-1up"></div></div>
-
-<!-- Option liens via links.js (facultatif) -->
-<script src="./links.js" defer></script>
 
 <script>
 /*** PARAMS ***/
@@ -257,16 +254,7 @@ function updateNavFromScroll(){
 
 /*** LIENS ***/
 let LINKS_MAP = {};
-function loadLinksFromGlobalThenJson(){
-  // 1) links.js (global)
-  if (window.__LINKS__ && typeof window.__LINKS__ === 'object'){
-    LINKS_MAP = window.__LINKS__;
-    $linksInfo.textContent = `${Object.keys(LINKS_MAP).length} page(s) avec liens • src: links.js`;
-    for (const p of pages) mountLinksForPage(p);
-    updateLinksInteractivity();
-    return;
-  }
-  // 2) fallback links.json
+function loadLinksFromJson(){
   fetch(LINKS_JSON_URL + '?v=' + Date.now(), {cache:'no-store'})
     .then(r=>r.ok?r.text():Promise.reject(r.status))
     .then(txt=>JSON.parse(txt.replace(/^\uFEFF/,'').trim()))
@@ -404,11 +392,11 @@ function addEncodedLink(p,r){
 
 function exportLinksFile(){
   const ordered={}; Object.keys(LINKS_MAP).sort((a,b)=>+a-+b).forEach(k=>{ if(LINKS_MAP[k]?.length) ordered[k]=LINKS_MAP[k]; });
-  const content='window.__LINKS__ = '+JSON.stringify(ordered,null,2)+';\n';
-  const url=URL.createObjectURL(new Blob([content],{type:'text/javascript;charset=utf-8'}));
-  const a=document.createElement('a'); a.href=url; a.download='links.js'; a.click();
+  const content=JSON.stringify(ordered,null,2)+'\n';
+  const url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download='links.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  $linkEditorInfo.textContent='Le nouveau fichier links.js a été téléchargé.';
+  $linkEditorInfo.textContent='Le nouveau fichier links.json a été téléchargé.';
 }
 
 /*** CORRECTIONS ***/
@@ -557,7 +545,7 @@ window.addEventListener('load', async ()=>{
   rebuild();
   toggleDrawMode(false);
 
-  loadLinksFromGlobalThenJson();
+  loadLinksFromJson();
   toggleLinks(false);
   $linksToggle.addEventListener('click',()=>toggleLinks(!linksVisible));
 
@@ -622,3 +610,4 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
