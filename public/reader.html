@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Version : bouton Table des matières, sans doubles flèches de pagination -->
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
@@ -80,9 +81,7 @@
   <div class="section">
     <div class="row"><strong>Pages</strong></div>
     <div class="row">
-      <button class="btn" id="prev">◂</button>
-      <span class="pill" id="pageDisp">1</span>
-      <button class="btn" id="next">▸</button>
+      <button class="btn" id="tocButton">Table des matières</button>
       <input id="pageJump" class="jump" type="number" min="0" step="1" placeholder="n°" />
     </div>
   </div>
@@ -165,6 +164,7 @@ const corrPath = n => `${CORRECTIONS_ROOT}/${fileName(n)}`;
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
 const FRONT_MATTER_PAGES = 2;
+const TABLE_OF_CONTENTS_PAGE = 1;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
@@ -172,10 +172,9 @@ let corrReadyCount = 0, revealReady = false;
 const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
 
 const $viewport=document.getElementById('viewport');
-const $pageDisp=document.getElementById('pageDisp');
 const $pageJump=document.getElementById('pageJump');
 const $zoomVal=document.getElementById('zoomVal');
-const $prev=document.getElementById('prev'), $next=document.getElementById('next');
+const $tocButton=document.getElementById('tocButton');
 const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById('mode2up');
 const $book=document.getElementById('bookMode');
 const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoomOut');
@@ -243,8 +242,6 @@ function fitWidth(){
 function cardsReal(){ return [...document.querySelectorAll('.page:not(.spacer)')]; }
 function syncPageUI(){
   const displayed=displayNumberFromIndex(currentIndex);
-  $pageDisp.textContent=displayed;
-  $pageDisp.title=currentIndex===0?'Couverture':currentIndex===1?'Deuxième de couverture':`Page ${displayed}`;
   $pageJump.value=displayed;
 }
 function gotoIndex(target){
@@ -597,8 +594,7 @@ window.addEventListener('load', async ()=>{
   document.getElementById('resetZoom').addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
-  document.getElementById('prev').addEventListener('click',()=>goto(-1));
-  document.getElementById('next').addEventListener('click',()=>goto(+1));
+  $tocButton.addEventListener('click',()=>gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE)));
   document.getElementById('pageJump').addEventListener('change',()=>{
     const n=parseInt($pageJump.value,10);
     const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
@@ -633,4 +629,3 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
-
