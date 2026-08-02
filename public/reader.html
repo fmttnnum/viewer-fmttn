@@ -29,6 +29,8 @@
   body.is-panning .linksLayer{cursor:grabbing!important;user-select:none}
   body.annotation-enabled .dr{cursor:crosshair;touch-action:none}
   body.annotation-text .dr{cursor:text}
+  body.annotation-select .dr{cursor:default}
+  body.annotation-select.annotation-dragging .dr{cursor:move}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
   #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center; }
@@ -100,17 +102,18 @@
   .colorGrid{display:flex;gap:10px;margin-bottom:12px}
   .colorChoice{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #9ca3af;cursor:pointer;padding:0}
   .colorChoice.selected{box-shadow:0 0 0 3px #111}
+  .fontSizeRow{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .fontSizeInput{width:84px;padding:7px 9px;border:1px solid #9ca3af;border-radius:8px;background:#fff;font:16px/1 Calibri,"Carlito","Segoe UI",sans-serif}
+  .fontSizeUnit{color:#4b5563}
   .annotationTools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .annotationTool{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:40px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .annotationToolWide{grid-column:1/-1;justify-content:center}
   .annotationTool.selected{background:#111;color:#fff;border-color:#111}
   .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
   .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
-  .textDialogBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
-  .textDialogBackdrop.open{display:flex}
-  .textDialog{width:min(440px,100%);background:#fff;border-radius:16px;box-shadow:0 22px 60px rgba(0,0,0,.25);padding:16px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
-  .textDialog textarea{width:100%;min-height:130px;resize:vertical;border:1px solid #9ca3af;border-radius:10px;padding:10px;font:18px/1.3 Calibri,"Carlito","Segoe UI",sans-serif;margin:10px 0}
-  .textDialogActions{display:flex;justify-content:flex-end;gap:8px}
+  .inlineTextEditor{position:absolute;z-index:4;margin:0;padding:0;border:3px dashed currentColor;border-radius:2px;background:rgba(255,255,255,.08);outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;line-height:1.22;color:inherit;caret-color:currentColor;box-sizing:border-box}
+  .inlineTextEditor::placeholder{color:currentColor;opacity:.48}
   @media (max-width:760px){.annotationPopup{right:12px;top:64px}}
 
   /* on masque la légende numérotée */
@@ -210,8 +213,14 @@
     <button class="colorChoice" data-color="#22c55e" style="background:#22c55e" title="Vert" aria-label="Vert"></button>
     <button class="colorChoice" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
   </div>
+  <div class="annotationLabel"><label for="annotationFontSize">Taille de police</label></div>
+  <div class="fontSizeRow">
+    <input id="annotationFontSize" class="fontSizeInput" type="number" min="12" max="80" step="1" value="34" inputmode="numeric" aria-label="Taille de la police" />
+    <span class="fontSizeUnit">px</span>
+  </div>
   <div class="annotationLabel">Outil</div>
   <div class="annotationTools">
+    <button class="btn annotationTool annotationToolWide" data-tool="select"><span class="toolIcon">↖</span>Sélectionner / déplacer</button>
     <button class="btn annotationTool" data-tool="highlight"><span class="toolIcon">▰</span>Surligneur</button>
     <button class="btn annotationTool" data-tool="freehand"><span class="toolIcon">✎</span>Dessin libre</button>
     <button class="btn annotationTool" data-tool="rectangle"><span class="toolIcon">▭</span>Rectangle</button>
@@ -223,17 +232,6 @@
   <div class="annotationActions">
     <button id="stopAnnotation" class="btn" disabled>Arrêter l'outil</button>
     <button id="clearAnnotations" class="btn">Effacer les annotations</button>
-  </div>
-</div>
-
-<div id="textDialogBackdrop" class="textDialogBackdrop" role="dialog" aria-modal="true" aria-labelledby="textDialogTitle">
-  <div class="textDialog">
-    <strong id="textDialogTitle">Ajouter un texte</strong>
-    <textarea id="annotationTextInput" placeholder="Écris ton annotation ici…"></textarea>
-    <div class="textDialogActions">
-      <button id="cancelAnnotationText" class="btn">Annuler</button>
-      <button id="saveAnnotationText" class="btn btn-dark">Ajouter</button>
-    </div>
   </div>
 </div>
 
@@ -260,10 +258,10 @@ const HIGHLIGHT_WIDTH_PX = 54;
 const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
 const ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
 const DRAW_WIDTH_PX = 7;
-const TEXT_FONT_PX = 34;
+const DEFAULT_TEXT_FONT_PX = 34;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', linksVisible=false, linkDrawMode=false;
+let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = false;
@@ -286,10 +284,7 @@ const $closeAnnotations=document.getElementById('closeAnnotations');
 const $stopAnnotation=document.getElementById('stopAnnotation');
 const $clearAnnotations=document.getElementById('clearAnnotations');
 const $annotationHint=document.getElementById('annotationHint');
-const $textDialogBackdrop=document.getElementById('textDialogBackdrop');
-const $annotationTextInput=document.getElementById('annotationTextInput');
-const $saveAnnotationText=document.getElementById('saveAnnotationText');
-const $cancelAnnotationText=document.getElementById('cancelAnnotationText');
+const $annotationFontSize=document.getElementById('annotationFontSize');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
 const $linksToggle=document.getElementById('linksToggle');
@@ -309,6 +304,8 @@ const historyStack=[];
 let selectedLink=null;
 let storedAnnotations=loadStoredAnnotations();
 let pendingTextAnnotation=null;
+let selectedAnnotation=null;
+let annotationFontEditBefore=null;
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -459,7 +456,9 @@ function applyZoom(){
   }
   $zoomVal.textContent=`${zoomPct}%`;
   if($slider) $slider.value=String(zoomPct);
+  updateInlineTextEditorScale();
   updatePanState();
+  if(selectedAnnotation) redrawDraft(selectedAnnotation.p,null);
 }
 function fitWidth(){
   if(!firstPageWidth) return;
@@ -684,16 +683,18 @@ function toggleDrawMode(on){
   updateLinksInteractivity();
 }
 
-const TOOL_LABELS={highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
+const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
 const TOOL_HINTS={
+  select:'Clique sur un élément pour le déplacer. Utilise les poignées bleues pour le redimensionner. Double-clique sur un texte pour le modifier.',
   highlight:'Maintiens le clic et glisse : le surlignage restera horizontal.',
   freehand:'Maintiens le clic et dessine librement sur la page.',
   rectangle:'Clique et glisse pour tracer un rectangle.',
   ellipse:'Clique et glisse pour tracer un cercle ou une ellipse.',
   line:'Clique et glisse pour tracer une ligne droite, dans n’importe quelle direction.',
-  text:'Clique et glisse pour choisir la zone du texte, puis écris dans la fenêtre.'
+  text:'Clique et glisse pour créer la zone, puis écris directement dedans.'
 };
 function setAnnotationTool(tool){
+  if(tool!=='select') clearSelectedAnnotation();
   annotationTool=tool||null;
   if(annotationTool){
     if(drawMode) toggleDrawMode(false);
@@ -705,6 +706,7 @@ function setAnnotationTool(tool){
   }
   document.body.classList.toggle('annotation-enabled',!!annotationTool);
   document.body.classList.toggle('annotation-text',annotationTool==='text');
+  document.body.classList.toggle('annotation-select',annotationTool==='select');
   document.querySelectorAll('.annotationTool').forEach(button=>{
     const selected=button.dataset.tool===annotationTool;
     button.classList.toggle('selected',selected);
@@ -785,7 +787,7 @@ function wrappedTextLines(ctx,text,maxWidth){
   return result;
 }
 function drawAnnotation(ctx,a){
-  if(!a) return;
+  if(!a||pendingTextAnnotation?.annotation===a) return;
   ctx.save();
   ctx.strokeStyle=a.color||'#ffe100';
   ctx.fillStyle=a.color||'#ffe100';
@@ -814,7 +816,7 @@ function drawAnnotation(ctx,a){
     ctx.lineWidth=a.widthLine||DRAW_WIDTH_PX;
     ctx.beginPath(); ctx.ellipse(a.x+a.w/2,a.y+a.h/2,Math.abs(a.w/2),Math.abs(a.h/2),0,0,Math.PI*2); ctx.stroke();
   }else if(a.kind==='text'){
-    const size=a.fontSize||TEXT_FONT_PX;
+    const size=a.fontSize||DEFAULT_TEXT_FONT_PX;
     const lineHeight=Math.round(size*1.22);
     ctx.font=`${size}px Calibri, Carlito, "Segoe UI", sans-serif`;
     ctx.textBaseline='top';
@@ -824,9 +826,143 @@ function drawAnnotation(ctx,a){
   }
   ctx.restore();
 }
+function cloneAnnotation(annotation){
+  return JSON.parse(JSON.stringify(annotation));
+}
+function restoreAnnotation(annotation,snapshot){
+  for(const key of Object.keys(annotation)) delete annotation[key];
+  Object.assign(annotation,cloneAnnotation(snapshot));
+}
+function annotationBounds(a){
+  if(!a) return null;
+  if(a.kind==='highlight'){
+    const half=(a.width||HIGHLIGHT_WIDTH_PX)/2;
+    return {x:Math.min(a.x1,a.x2),y:a.y-half,w:Math.abs(a.x2-a.x1),h:half*2};
+  }
+  if(a.kind==='line'){
+    return {x:Math.min(a.x1,a.x2),y:Math.min(a.y1,a.y2),w:Math.abs(a.x2-a.x1),h:Math.abs(a.y2-a.y1)};
+  }
+  if(a.kind==='freehand'){
+    const points=a.points||[];
+    if(!points.length) return null;
+    const xs=points.map(point=>point.x), ys=points.map(point=>point.y);
+    return {x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
+  }
+  if(['rectangle','ellipse','text'].includes(a.kind)) return {x:a.x,y:a.y,w:a.w,h:a.h};
+  return null;
+}
+function distanceToSegment(point,a,b){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  if(!dx&&!dy) return Math.hypot(point.x-a.x,point.y-a.y);
+  const t=clamp(((point.x-a.x)*dx+(point.y-a.y)*dy)/(dx*dx+dy*dy),0,1);
+  return Math.hypot(point.x-(a.x+t*dx),point.y-(a.y+t*dy));
+}
+function localUiSize(p,cssPixels){
+  const r=p.canDr.getBoundingClientRect();
+  const scale=landscapeMode ? r.height/p.w : r.width/p.w;
+  return cssPixels/Math.max(scale,.01);
+}
+function annotationContainsPoint(p,a,point){
+  const tolerance=localUiSize(p,10);
+  if(a.kind==='line') return distanceToSegment(point,{x:a.x1,y:a.y1},{x:a.x2,y:a.y2})<=tolerance+(a.width||DRAW_WIDTH_PX)/2;
+  if(a.kind==='highlight'){
+    const left=Math.min(a.x1,a.x2)-tolerance, right=Math.max(a.x1,a.x2)+tolerance;
+    return point.x>=left&&point.x<=right&&Math.abs(point.y-a.y)<=(a.width||HIGHLIGHT_WIDTH_PX)/2+tolerance;
+  }
+  if(a.kind==='freehand'){
+    const points=a.points||[];
+    for(let i=1;i<points.length;i++) if(distanceToSegment(point,points[i-1],points[i])<=tolerance+(a.width||DRAW_WIDTH_PX)/2) return true;
+    return points.length===1&&Math.hypot(point.x-points[0].x,point.y-points[0].y)<=tolerance;
+  }
+  const b=annotationBounds(a);
+  return !!b&&point.x>=b.x-tolerance&&point.x<=b.x+b.w+tolerance&&point.y>=b.y-tolerance&&point.y<=b.y+b.h+tolerance;
+}
+function findAnnotationAt(p,point){
+  const list=p.annotations||[];
+  for(let i=list.length-1;i>=0;i--) if(annotationContainsPoint(p,list[i],point)) return list[i];
+  return null;
+}
+function isResizableAnnotation(a){
+  return !!a&&['rectangle','ellipse','text'].includes(a.kind);
+}
+function annotationHandles(a){
+  if(!isResizableAnnotation(a)) return [];
+  const b=annotationBounds(a);
+  return [
+    {name:'nw',x:b.x,y:b.y},{name:'ne',x:b.x+b.w,y:b.y},
+    {name:'se',x:b.x+b.w,y:b.y+b.h},{name:'sw',x:b.x,y:b.y+b.h}
+  ];
+}
+function handleAtPoint(p,a,point){
+  const radius=localUiSize(p,12);
+  return annotationHandles(a).find(handle=>Math.hypot(point.x-handle.x,point.y-handle.y)<=radius)||null;
+}
+function drawSelectedAnnotation(p,ctx){
+  if(!selectedAnnotation||selectedAnnotation.p!==p||annotationTool!=='select') return;
+  const a=selectedAnnotation.annotation;
+  const b=annotationBounds(a);
+  if(!b) return;
+  const lineWidth=localUiSize(p,2);
+  const radius=localUiSize(p,6);
+  ctx.save();
+  ctx.strokeStyle='#2563eb';
+  ctx.fillStyle='#fff';
+  ctx.lineWidth=lineWidth;
+  ctx.setLineDash([localUiSize(p,7),localUiSize(p,5)]);
+  ctx.strokeRect(b.x,b.y,Math.max(b.w,lineWidth),Math.max(b.h,lineWidth));
+  ctx.setLineDash([]);
+  for(const handle of annotationHandles(a)){
+    ctx.beginPath(); ctx.rect(handle.x-radius,handle.y-radius,radius*2,radius*2); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function clearSelectedAnnotation(redraw=true){
+  const previous=selectedAnnotation?.p;
+  selectedAnnotation=null;
+  if(redraw&&previous) redrawDraft(previous,null);
+}
+function selectAnnotation(p,annotation){
+  const previous=selectedAnnotation?.p;
+  selectedAnnotation=annotation?{p,annotation}:null;
+  if(previous&&previous!==p) redrawDraft(previous,null);
+  redrawDraft(p,null);
+  if(annotation?.color){
+    annotationColor=annotation.color;
+    document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice.dataset.color===annotationColor));
+  }
+  if(annotation?.kind==='text'){
+    annotationFontSize=clamp(parseInt(annotation.fontSize,10)||DEFAULT_TEXT_FONT_PX,12,80);
+    $annotationFontSize.value=String(annotationFontSize);
+  }
+}
+function translateAnnotation(annotation,dx,dy){
+  if(['rectangle','ellipse','text'].includes(annotation.kind)){ annotation.x+=dx; annotation.y+=dy; return; }
+  if(annotation.kind==='highlight'){ annotation.x1+=dx; annotation.x2+=dx; annotation.y+=dy; return; }
+  if(annotation.kind==='line'){ annotation.x1+=dx; annotation.x2+=dx; annotation.y1+=dy; annotation.y2+=dy; return; }
+  if(annotation.kind==='freehand') for(const point of annotation.points||[]){ point.x+=dx; point.y+=dy; }
+}
+function moveAnnotationFromSnapshot(p,annotation,snapshot,dx,dy){
+  restoreAnnotation(annotation,snapshot);
+  const b=annotationBounds(annotation);
+  dx=clamp(dx,-b.x,p.w-(b.x+b.w));
+  dy=clamp(dy,-b.y,p.h-(b.y+b.h));
+  translateAnnotation(annotation,dx,dy);
+}
+function resizeAnnotationFromSnapshot(p,annotation,snapshot,handle,point){
+  restoreAnnotation(annotation,snapshot);
+  const b=annotationBounds(snapshot);
+  const minSize=localUiSize(p,24);
+  let left=b.x, top=b.y, right=b.x+b.w, bottom=b.y+b.h;
+  if(handle.includes('w')) left=clamp(point.x,0,right-minSize);
+  if(handle.includes('e')) right=clamp(point.x,left+minSize,p.w);
+  if(handle.includes('n')) top=clamp(point.y,0,bottom-minSize);
+  if(handle.includes('s')) bottom=clamp(point.y,top+minSize,p.h);
+  annotation.x=left; annotation.y=top; annotation.w=right-left; annotation.h=bottom-top;
+}
 function redrawDraft(p,d){
   const ctx=p.canDr.getContext('2d');
   ctx.clearRect(0,0,p.w,p.h);
+  drawSelectedAnnotation(p,ctx);
   if(!d) return;
   if(d.kind==='highlight'){
     ctx.save();
@@ -866,19 +1002,68 @@ function commitAnnotation(p,annotation){
   saveAnnotations();
   redrawOverlay(p);
 }
-function openTextDialog(p,annotation){
-  pendingTextAnnotation={p,annotation};
-  $annotationTextInput.value='';
-  $textDialogBackdrop.classList.add('open');
-  setTimeout(()=>$annotationTextInput.focus(),0);
+function updateInlineTextEditorScale(){
+  if(!pendingTextAnnotation?.element) return;
+  const {element,annotation}=pendingTextAnnotation;
+  const scale=cssScaleFromPct();
+  element.style.fontSize=Math.max(8,annotation.fontSize*scale)+'px';
 }
-function closeTextDialog(keepDraft=false){
-  if(pendingTextAnnotation && !keepDraft) redrawDraft(pendingTextAnnotation.p,null);
+function finishInlineTextEditor(save=true){
+  if(!pendingTextAnnotation) return;
+  const pending=pendingTextAnnotation;
   pendingTextAnnotation=null;
-  $textDialogBackdrop.classList.remove('open');
+  const text=pending.element.value.trim();
+  pending.element.remove();
+  redrawDraft(pending.p,null);
+  if(save && text){
+    pending.annotation.text=text;
+    if(pending.isNew){
+      commitAnnotation(pending.p,pending.annotation);
+    }else{
+      historyStack.push({type:'annotation-transform',page:pending.p,annotation:pending.annotation,before:pending.before});
+      $undo.disabled=false;
+      saveAnnotations();
+      redrawOverlay(pending.p);
+    }
+    setAnnotationTool('select');
+    selectAnnotation(pending.p,pending.annotation);
+  }else if(!pending.isNew){
+    restoreAnnotation(pending.annotation,pending.before);
+    redrawOverlay(pending.p);
+  }
+}
+function openInlineTextEditor(p,annotation,isNew=true){
+  if(pendingTextAnnotation) finishInlineTextEditor(true);
+  redrawDraft(p,null);
+  const textarea=document.createElement('textarea');
+  textarea.className='inlineTextEditor';
+  textarea.placeholder='Écris ici…';
+  textarea.setAttribute('aria-label','Texte de l’annotation');
+  textarea.style.left=(annotation.x/p.w*100)+'%';
+  textarea.style.top=(annotation.y/p.h*100)+'%';
+  textarea.style.width=(annotation.w/p.w*100)+'%';
+  textarea.style.height=(annotation.h/p.h*100)+'%';
+  textarea.style.color=annotation.color;
+  textarea.value=isNew?'':(annotation.text||'');
+  p.box.appendChild(textarea);
+  pendingTextAnnotation={p,annotation,element:textarea,isNew,before:cloneAnnotation(annotation)};
+  redrawOverlay(p);
+  updateInlineTextEditorScale();
+  textarea.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      e.preventDefault();
+      finishInlineTextEditor(false);
+    }else if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
+      e.preventDefault();
+      finishInlineTextEditor(true);
+    }
+  });
+  textarea.addEventListener('blur',()=>finishInlineTextEditor(true),{once:true});
+  requestAnimationFrame(()=>{textarea.focus(); if(!isNew) textarea.setSelectionRange(textarea.value.length,textarea.value.length);});
 }
 function attachDrawHandlers(p){
   let draft=null;
+  let selectionGesture=null;
   const toLocal=e=>{
     const r=p.canDr.getBoundingClientRect();
     if(landscapeMode){
@@ -891,8 +1076,26 @@ function attachDrawHandlers(p){
   };
   function down(e){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
+    if(e.button!==undefined&&e.button!==0) return;
     e.preventDefault();
+    if(pendingTextAnnotation){ finishInlineTextEditor(true); return; }
     const start=toLocal(e);
+    if(annotationTool==='select'){
+      const current=selectedAnnotation?.p===p?selectedAnnotation.annotation:null;
+      const handle=current?handleAtPoint(p,current,start):null;
+      const hit=handle?current:findAnnotationAt(p,start);
+      if(!hit){ clearSelectedAnnotation(); return; }
+      selectAnnotation(p,hit);
+      selectionGesture={
+        annotation:hit,
+        before:cloneAnnotation(hit),
+        start,
+        handle:handle?.name||null,
+        changed:false
+      };
+      document.body.classList.add('annotation-dragging');
+      return;
+    }
     if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
     else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
@@ -901,6 +1104,15 @@ function attachDrawHandlers(p){
     redrawDraft(p,draft);
   }
   function move(e){
+    if(selectionGesture){
+      const point=toLocal(e);
+      if(selectionGesture.handle) resizeAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before,selectionGesture.handle,point);
+      else moveAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before,point.x-selectionGesture.start.x,point.y-selectionGesture.start.y);
+      selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
+      redrawOverlay(p);
+      redrawDraft(p,null);
+      return;
+    }
     if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     const m=toLocal(e);
     if(draft.kind==='highlight') draft.x2=clamp(m.x,0,p.w);
@@ -913,6 +1125,19 @@ function attachDrawHandlers(p){
     redrawDraft(p,draft);
   }
   function up(){
+    if(selectionGesture){
+      const gesture=selectionGesture;
+      selectionGesture=null;
+      document.body.classList.remove('annotation-dragging');
+      if(gesture.changed){
+        historyStack.push({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before});
+        $undo.disabled=false;
+        saveAnnotations();
+      }
+      redrawOverlay(p);
+      redrawDraft(p,null);
+      return;
+    }
     if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     if(draft.kind==='highlight'){
       const line={
@@ -944,7 +1169,11 @@ function attachDrawHandlers(p){
       draft=null;
       if(r.w>10&&r.h>10){
         const annotation={kind,color,x:r.x,y:r.y,w:r.w,h:r.h,widthLine};
-        if(kind==='text'){ redrawDraft(p,annotation); openTextDialog(p,annotation); return; }
+        if(kind==='text'){
+          annotation.fontSize=annotationFontSize;
+          openInlineTextEditor(p,annotation);
+          return;
+        }
         commitAnnotation(p,annotation);
       }
       redrawDraft(p,null); return;
@@ -957,6 +1186,14 @@ function attachDrawHandlers(p){
     redrawDraft(p,null);
   }
   p.canDr.addEventListener('mousedown',down);
+  p.canDr.addEventListener('dblclick',e=>{
+    if(annotationTool!=='select') return;
+    const annotation=findAnnotationAt(p,toLocal(e));
+    if(annotation?.kind!=='text') return;
+    e.preventDefault();
+    selectAnnotation(p,annotation);
+    openInlineTextEditor(p,annotation,false);
+  });
   window.addEventListener('mousemove',move);
   window.addEventListener('mouseup',up);
 }
@@ -1183,7 +1420,7 @@ window.addEventListener('load', async ()=>{
   });
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
-      if($textDialogBackdrop.classList.contains('open')){ closeTextDialog(); return; }
+      if(pendingTextAnnotation){ finishInlineTextEditor(false); return; }
       if($annotationPopup.classList.contains('open')){ $annotationPopup.classList.remove('open'); return; }
     }
     if(e.target.matches('input,textarea,select')) return;
@@ -1210,7 +1447,49 @@ window.addEventListener('load', async ()=>{
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
+    if(annotationTool==='select'&&selectedAnnotation){
+      const {p,annotation}=selectedAnnotation;
+      const before=cloneAnnotation(annotation);
+      annotation.color=annotationColor;
+      historyStack.push({type:'annotation-transform',page:p,annotation,before});
+      $undo.disabled=false;
+      saveAnnotations();
+      redrawOverlay(p);
+      redrawDraft(p,null);
+    }
   }));
+  $annotationFontSize.addEventListener('focus',()=>{
+    annotationFontEditBefore=annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'
+      ? cloneAnnotation(selectedAnnotation.annotation)
+      : null;
+  });
+  $annotationFontSize.addEventListener('change',()=>{
+    annotationFontSize=clamp(parseInt($annotationFontSize.value,10)||DEFAULT_TEXT_FONT_PX,12,80);
+    $annotationFontSize.value=String(annotationFontSize);
+    if(annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'){
+      const {p,annotation}=selectedAnnotation;
+      annotation.fontSize=annotationFontSize;
+      if(annotationFontEditBefore&&annotationFontEditBefore.fontSize!==annotation.fontSize){
+        historyStack.push({type:'annotation-transform',page:p,annotation,before:annotationFontEditBefore});
+        $undo.disabled=false;
+      }
+      saveAnnotations();
+      redrawOverlay(p);
+      redrawDraft(p,null);
+    }
+    annotationFontEditBefore=null;
+  });
+  $annotationFontSize.addEventListener('input',()=>{
+    const value=parseInt($annotationFontSize.value,10);
+    if(Number.isFinite(value)){
+      annotationFontSize=clamp(value,12,80);
+      if(annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'){
+        selectedAnnotation.annotation.fontSize=annotationFontSize;
+        redrawOverlay(selectedAnnotation.p);
+        redrawDraft(selectedAnnotation.p,null);
+      }
+    }
+  });
   document.querySelectorAll('.annotationTool').forEach(button=>button.addEventListener('click',()=>{
     setAnnotationTool(button.dataset.tool);
     $annotationPopup.classList.remove('open');
@@ -1218,26 +1497,13 @@ window.addEventListener('load', async ()=>{
   $stopAnnotation.addEventListener('click',()=>setAnnotationTool(null));
   $clearAnnotations.addEventListener('click',()=>{
     if(!confirm('Effacer toutes les annotations enregistrées dans cette liseuse ?')) return;
+    if(pendingTextAnnotation) finishInlineTextEditor(false);
+    clearSelectedAnnotation(false);
     for(const p of pages){ p.annotations=[]; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='annotation') historyStack.splice(i,1);
+    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='annotation'||historyStack[i].type==='annotation-transform') historyStack.splice(i,1);
     $undo.disabled=historyStack.length===0;
     saveAnnotations();
   });
-  $cancelAnnotationText.addEventListener('click',()=>closeTextDialog());
-  $saveAnnotationText.addEventListener('click',()=>{
-    if(!pendingTextAnnotation) return;
-    const text=$annotationTextInput.value.trim();
-    const {p,annotation}=pendingTextAnnotation;
-    if(!text){ $annotationTextInput.focus(); return; }
-    annotation.text=text;
-    annotation.fontSize=TEXT_FONT_PX;
-    commitAnnotation(p,annotation);
-    closeTextDialog();
-  });
-  $annotationTextInput.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); $saveAnnotationText.click(); }
-  });
-
   $undo.addEventListener('click', doUndo);
   $undo.disabled = true;
   function doUndo(){
@@ -1249,6 +1515,12 @@ window.addEventListener('load', async ()=>{
       if(i!==-1) last.page.annotations.splice(i,1);
       saveAnnotations();
       redrawOverlay(last.page);
+      if(selectedAnnotation?.annotation===last.annotation) clearSelectedAnnotation();
+    }else if(last.type==='annotation-transform'){
+      restoreAnnotation(last.annotation,last.before);
+      saveAnnotations();
+      redrawOverlay(last.page);
+      redrawDraft(last.page,null);
     }else{
       const i=last.page.zones.lastIndexOf(last.rect);
       if(i!==-1) last.page.zones.splice(i,1);
