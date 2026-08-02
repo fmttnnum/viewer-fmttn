@@ -94,11 +94,12 @@
   .badge.warn{ background:var(--warn) }
 
   /* fenêtre des annotations */
-  .annotationPopup{position:fixed;right:294px;top:116px;width:310px;max-width:calc(100vw - 24px);background:#fff;border:1px solid #d1d5db;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:14px;z-index:40;display:none;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .annotationPopup{position:fixed;right:294px;top:116px;width:310px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#fff;border:1px solid #d1d5db;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:14px;z-index:40;display:none;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
   .annotationPopup.open{display:block}
-  .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px -6px 12px;padding:6px;cursor:grab;user-select:none;touch-action:none}
+  .annotationPopup.dragging .annotationPopupHeader{cursor:grabbing}
   .annotationPopupTitle{font-size:17px;font-weight:700}
-  .annotationClose{width:32px;height:32px;padding:0;font-size:20px;line-height:1}
+  .annotationClose{width:32px;height:32px;padding:0;font-size:20px;line-height:1;cursor:pointer;touch-action:manipulation}
   .annotationLabel{font-weight:700;margin:9px 0 6px}
   .colorGrid{display:flex;gap:10px;margin-bottom:12px}
   .colorChoice{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #9ca3af;cursor:pointer;padding:0}
@@ -232,7 +233,7 @@
   </div>
   <div id="annotationHint" class="annotationHint">Choisis une couleur, puis un outil.</div>
   <div class="annotationActions">
-    <button id="stopAnnotation" class="btn" disabled>Arrêter l'outil</button>
+    <button id="stopAnnotation" class="btn" disabled>Fermer les annotations</button>
     <button id="clearAnnotations" class="btn">Effacer les annotations</button>
   </div>
 </div>
@@ -282,6 +283,7 @@ const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElem
 const $undo=document.getElementById('undo');
 const $openAnnotations=document.getElementById('openAnnotations');
 const $annotationPopup=document.getElementById('annotationPopup');
+const $annotationPopupHeader=$annotationPopup.querySelector('.annotationPopupHeader');
 const $closeAnnotations=document.getElementById('closeAnnotations');
 const $stopAnnotation=document.getElementById('stopAnnotation');
 const $clearAnnotations=document.getElementById('clearAnnotations');
@@ -718,6 +720,66 @@ function setAnnotationTool(tool){
   $openAnnotations.classList.toggle('btn-amber',!!annotationTool);
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
+}
+
+function keepAnnotationPopupInWindow(left,top){
+  const margin=8;
+  const width=$annotationPopup.offsetWidth;
+  const height=$annotationPopup.offsetHeight;
+  return {
+    left:clamp(left,margin,Math.max(margin,window.innerWidth-width-margin)),
+    top:clamp(top,margin,Math.max(margin,window.innerHeight-height-margin))
+  };
+}
+function placeAnnotationPopupInWindow(){
+  if(!$annotationPopup.classList.contains('open')) return;
+  const rect=$annotationPopup.getBoundingClientRect();
+  const position=keepAnnotationPopupInWindow(rect.left,rect.top);
+  $annotationPopup.style.left=`${position.left}px`;
+  $annotationPopup.style.top=`${position.top}px`;
+  $annotationPopup.style.right='auto';
+}
+function openAnnotationPopup(){
+  $annotationPopup.classList.add('open');
+  $openAnnotations.setAttribute('aria-expanded','true');
+  if(!annotationTool) setAnnotationTool('select');
+  requestAnimationFrame(placeAnnotationPopupInWindow);
+}
+function closeAnnotationPopup(){
+  if(pendingTextAnnotation) finishInlineTextEditor(true);
+  setAnnotationTool(null);
+  $annotationPopup.classList.remove('open','dragging');
+  $openAnnotations.setAttribute('aria-expanded','false');
+}
+function enableAnnotationPopupDragging(){
+  let drag=null;
+  $annotationPopupHeader.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button,input,select,textarea,a')) return;
+    if(e.pointerType==='mouse'&&e.button!==0) return;
+    const rect=$annotationPopup.getBoundingClientRect();
+    $annotationPopup.style.left=`${rect.left}px`;
+    $annotationPopup.style.top=`${rect.top}px`;
+    $annotationPopup.style.right='auto';
+    drag={pointerId:e.pointerId,offsetX:e.clientX-rect.left,offsetY:e.clientY-rect.top};
+    $annotationPopup.classList.add('dragging');
+    try{$annotationPopupHeader.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  });
+  $annotationPopupHeader.addEventListener('pointermove',e=>{
+    if(!drag||drag.pointerId!==e.pointerId) return;
+    const position=keepAnnotationPopupInWindow(e.clientX-drag.offsetX,e.clientY-drag.offsetY);
+    $annotationPopup.style.left=`${position.left}px`;
+    $annotationPopup.style.top=`${position.top}px`;
+  });
+  const endDrag=e=>{
+    if(!drag||drag.pointerId!==e.pointerId) return;
+    try{$annotationPopupHeader.releasePointerCapture(e.pointerId);}catch(_){}
+    drag=null;
+    $annotationPopup.classList.remove('dragging');
+  };
+  $annotationPopupHeader.addEventListener('pointerup',endDrag);
+  $annotationPopupHeader.addEventListener('pointercancel',endDrag);
+  window.addEventListener('resize',()=>requestAnimationFrame(placeAnnotationPopupInWindow));
 }
 
 function addEncodedLink(p,r){
@@ -1544,7 +1606,7 @@ window.addEventListener('load', async ()=>{
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
       if(pendingTextAnnotation){ finishInlineTextEditor(false); return; }
-      if($annotationPopup.classList.contains('open')){ $annotationPopup.classList.remove('open'); return; }
+      if($annotationPopup.classList.contains('open')){ closeAnnotationPopup(); return; }
     }
     if(e.target.matches('input,textarea,select')) return;
     if((e.key==='Delete'||e.key==='Backspace'||e.key==='Del'||e.code==='Delete'||e.keyCode===46)&&selectedAnnotation){
@@ -1568,10 +1630,10 @@ window.addEventListener('load', async ()=>{
     $revealAll.textContent='Tout révéler';
   });
 
-  $openAnnotations.addEventListener('click',()=>{
-    $annotationPopup.classList.toggle('open');
-  });
-  $closeAnnotations.addEventListener('click',()=>{$annotationPopup.classList.remove('open');});
+  enableAnnotationPopupDragging();
+  $openAnnotations.setAttribute('aria-expanded','false');
+  $openAnnotations.addEventListener('click',openAnnotationPopup);
+  $closeAnnotations.addEventListener('click',closeAnnotationPopup);
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
@@ -1620,9 +1682,8 @@ window.addEventListener('load', async ()=>{
   });
   document.querySelectorAll('.annotationTool').forEach(button=>button.addEventListener('click',()=>{
     setAnnotationTool(button.dataset.tool);
-    $annotationPopup.classList.remove('open');
   }));
-  $stopAnnotation.addEventListener('click',()=>setAnnotationTool(null));
+  $stopAnnotation.addEventListener('click',closeAnnotationPopup);
   $clearAnnotations.addEventListener('click',()=>{
     if(!confirm('Effacer toutes les annotations enregistrées dans cette liseuse ?')) return;
     if(pendingTextAnnotation) finishInlineTextEditor(false);
