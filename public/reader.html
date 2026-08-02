@@ -687,7 +687,7 @@ function toggleDrawMode(on){
 
 const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
 const TOOL_HINTS={
-  select:'Clique sur un élément pour le déplacer. Utilise les poignées bleues pour le redimensionner. Double-clique sur un texte pour le modifier.',
+  select:'Clique sur un élément ou trace un cadre autour de plusieurs éléments. Déplace la sélection ou appuie sur Suppr pour l’effacer.',
   highlight:'Maintiens le clic et glisse : le surlignage restera horizontal.',
   freehand:'Maintiens le clic et dessine librement sur la page.',
   rectangle:'Clique et glisse pour tracer un rectangle.',
@@ -895,15 +895,31 @@ function annotationHandles(a){
     {name:'se',x:b.x+b.w,y:b.y+b.h},{name:'sw',x:b.x,y:b.y+b.h}
   ];
 }
+function selectedAnnotationList(){
+  if(!selectedAnnotation) return [];
+  return selectedAnnotation.annotations?.length ? selectedAnnotation.annotations : [selectedAnnotation.annotation];
+}
+function annotationsBounds(annotations){
+  const boxes=(annotations||[]).map(annotationBounds).filter(Boolean);
+  if(!boxes.length) return null;
+  const left=Math.min(...boxes.map(b=>b.x));
+  const top=Math.min(...boxes.map(b=>b.y));
+  const right=Math.max(...boxes.map(b=>b.x+b.w));
+  const bottom=Math.max(...boxes.map(b=>b.y+b.h));
+  return {x:left,y:top,w:right-left,h:bottom-top};
+}
+function boxesIntersect(a,b){
+  return !!a&&!!b&&a.x<=b.x+b.w&&a.x+a.w>=b.x&&a.y<=b.y+b.h&&a.y+a.h>=b.y;
+}
 function handleAtPoint(p,a,point){
   const radius=localUiSize(p,12);
   return annotationHandles(a).find(handle=>Math.hypot(point.x-handle.x,point.y-handle.y)<=radius)||null;
 }
 function drawSelectedAnnotation(p,ctx){
   if(!selectedAnnotation||selectedAnnotation.p!==p||annotationTool!=='select') return;
-  const a=selectedAnnotation.annotation;
-  if(pendingTextAnnotation?.annotation===a) return;
-  const b=annotationBounds(a);
+  const annotations=selectedAnnotationList();
+  if(annotations.length===1&&pendingTextAnnotation?.annotation===annotations[0]) return;
+  const b=annotationsBounds(annotations);
   if(!b) return;
   const lineWidth=localUiSize(p,2);
   const radius=localUiSize(p,6);
@@ -914,8 +930,10 @@ function drawSelectedAnnotation(p,ctx){
   ctx.setLineDash([localUiSize(p,7),localUiSize(p,5)]);
   ctx.strokeRect(b.x,b.y,Math.max(b.w,lineWidth),Math.max(b.h,lineWidth));
   ctx.setLineDash([]);
-  for(const handle of annotationHandles(a)){
-    ctx.beginPath(); ctx.rect(handle.x-radius,handle.y-radius,radius*2,radius*2); ctx.fill(); ctx.stroke();
+  if(annotations.length===1){
+    for(const handle of annotationHandles(annotations[0])){
+      ctx.beginPath(); ctx.rect(handle.x-radius,handle.y-radius,radius*2,radius*2); ctx.fill(); ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -925,26 +943,32 @@ function clearSelectedAnnotation(redraw=true){
   if(redraw&&previous) redrawDraft(previous,null);
 }
 function selectAnnotation(p,annotation){
+  selectAnnotations(p,annotation?[annotation]:[]);
+}
+function selectAnnotations(p,annotations){
   const previous=selectedAnnotation?.p;
-  selectedAnnotation=annotation?{p,annotation}:null;
+  const unique=[...new Set((annotations||[]).filter(Boolean))];
+  const annotation=unique[0]||null;
+  selectedAnnotation=annotation?{p,annotation,annotations:unique}:null;
   if(previous&&previous!==p) redrawDraft(previous,null);
   redrawDraft(p,null);
-  if(annotation?.color){
+  if(unique.length===1&&annotation?.color){
     annotationColor=annotation.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice.dataset.color===annotationColor));
   }
-  if(annotation?.kind==='text'){
+  if(unique.length===1&&annotation?.kind==='text'){
     annotationFontSize=clamp(parseInt(annotation.fontSize,10)||DEFAULT_TEXT_FONT_PX,12,80);
     $annotationFontSize.value=String(annotationFontSize);
   }
 }
 function deleteSelectedAnnotation(){
   if(!selectedAnnotation||pendingTextAnnotation) return false;
-  const {p,annotation}=selectedAnnotation;
-  const index=p.annotations.indexOf(annotation);
-  if(index===-1){ clearSelectedAnnotation(); return false; }
-  p.annotations.splice(index,1);
-  historyStack.push({type:'annotation-delete',page:p,annotation,index});
+  const {p}=selectedAnnotation;
+  const annotations=selectedAnnotationList();
+  const deleted=annotations.map(annotation=>({annotation,index:p.annotations.indexOf(annotation)})).filter(item=>item.index!==-1);
+  if(!deleted.length){ clearSelectedAnnotation(); return false; }
+  deleted.sort((a,b)=>b.index-a.index).forEach(item=>p.annotations.splice(item.index,1));
+  historyStack.push({type:'annotation-delete-multiple',page:p,items:deleted.sort((a,b)=>a.index-b.index)});
   $undo.disabled=false;
   selectedAnnotation=null;
   saveAnnotations();
@@ -965,6 +989,16 @@ function moveAnnotationFromSnapshot(p,annotation,snapshot,dx,dy){
   dy=clamp(dy,-b.y,p.h-(b.y+b.h));
   translateAnnotation(annotation,dx,dy);
 }
+function moveAnnotationsFromSnapshots(p,annotations,snapshots,dx,dy){
+  const startBounds=annotationsBounds(snapshots);
+  if(!startBounds) return;
+  dx=clamp(dx,-startBounds.x,p.w-(startBounds.x+startBounds.w));
+  dy=clamp(dy,-startBounds.y,p.h-(startBounds.y+startBounds.h));
+  annotations.forEach((annotation,index)=>{
+    restoreAnnotation(annotation,snapshots[index]);
+    translateAnnotation(annotation,dx,dy);
+  });
+}
 function resizeAnnotationFromSnapshot(p,annotation,snapshot,handle,point){
   restoreAnnotation(annotation,snapshot);
   const b=annotationBounds(snapshot);
@@ -981,6 +1015,18 @@ function redrawDraft(p,d){
   ctx.clearRect(0,0,p.w,p.h);
   drawSelectedAnnotation(p,ctx);
   if(!d) return;
+  if(d.kind==='selection-box'){
+    const r=normalizedBox(d);
+    ctx.save();
+    ctx.fillStyle='rgba(37,99,235,.09)';
+    ctx.strokeStyle='#2563eb';
+    ctx.lineWidth=localUiSize(p,2);
+    ctx.setLineDash([localUiSize(p,7),localUiSize(p,5)]);
+    ctx.fillRect(r.x,r.y,r.w,r.h);
+    ctx.strokeRect(r.x,r.y,r.w,r.h);
+    ctx.restore();
+    return;
+  }
   if(d.kind==='highlight'){
     ctx.save();
     ctx.globalAlpha=HIGHLIGHT_OPACITY;
@@ -1116,21 +1162,29 @@ function attachDrawHandlers(p){
     if(pendingTextAnnotation){ finishInlineTextEditor(true); return; }
     const start=toLocal(e);
     if(annotationTool==='select'){
-      const current=selectedAnnotation?.p===p?selectedAnnotation.annotation:null;
+      const currentAnnotations=selectedAnnotation?.p===p?selectedAnnotationList():[];
+      const current=currentAnnotations.length===1?currentAnnotations[0]:null;
       const handle=current?handleAtPoint(p,current,start):null;
       const hit=handle?current:findAnnotationAt(p,start);
-      if(!hit){ clearSelectedAnnotation(); return; }
+      if(!hit){
+        clearSelectedAnnotation(false);
+        selectionGesture={marquee:true,start,current:start,changed:false};
+        redrawDraft(p,{kind:'selection-box',x:start.x,y:start.y,w:0,h:0});
+        return;
+      }
       // Le mousedown est volontairement annulé pour empêcher le déplacement
       // de la page. Sans ce focus explicite, un champ du panneau (notamment la
       // taille de police) peut rester actif et capter la touche Suppr/Delete.
       // Le canevas devient la cible clavier de l'objet qui vient d'être choisi.
       p.canDr.focus({preventScroll:true});
-      selectAnnotation(p,hit);
+      const annotations=currentAnnotations.includes(hit)?currentAnnotations:[hit];
+      if(!currentAnnotations.includes(hit)) selectAnnotation(p,hit);
       selectionGesture={
         annotation:hit,
-        before:cloneAnnotation(hit),
+        annotations,
+        before:annotations.map(cloneAnnotation),
         start,
-        handle:handle?.name||null,
+        handle:annotations.length===1?handle?.name||null:null,
         changed:false
       };
       document.body.classList.add('annotation-dragging');
@@ -1146,8 +1200,14 @@ function attachDrawHandlers(p){
   function move(e){
     if(selectionGesture){
       const point=toLocal(e);
-      if(selectionGesture.handle) resizeAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before,selectionGesture.handle,point);
-      else moveAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before,point.x-selectionGesture.start.x,point.y-selectionGesture.start.y);
+      if(selectionGesture.marquee){
+        selectionGesture.current=point;
+        selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
+        redrawDraft(p,{kind:'selection-box',x:selectionGesture.start.x,y:selectionGesture.start.y,w:point.x-selectionGesture.start.x,h:point.y-selectionGesture.start.y});
+        return;
+      }
+      if(selectionGesture.handle) resizeAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before[0],selectionGesture.handle,point);
+      else moveAnnotationsFromSnapshots(p,selectionGesture.annotations,selectionGesture.before,point.x-selectionGesture.start.x,point.y-selectionGesture.start.y);
       selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
       redrawOverlay(p);
       redrawDraft(p,null);
@@ -1169,8 +1229,23 @@ function attachDrawHandlers(p){
       const gesture=selectionGesture;
       selectionGesture=null;
       document.body.classList.remove('annotation-dragging');
+      if(gesture.marquee){
+        if(!gesture.changed){
+          clearSelectedAnnotation(false);
+          redrawDraft(p,null);
+          return;
+        }
+        const box=normalizedBox({x:gesture.start.x,y:gesture.start.y,w:gesture.current.x-gesture.start.x,h:gesture.current.y-gesture.start.y});
+        const matches=(p.annotations||[]).filter(annotation=>boxesIntersect(annotationBounds(annotation),box));
+        selectAnnotations(p,matches);
+        return;
+      }
       if(gesture.changed){
-        historyStack.push({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before});
+        if(gesture.annotations.length===1){
+          historyStack.push({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0]});
+        }else{
+          historyStack.push({type:'annotation-transform-multiple',page:p,annotations:gesture.annotations,before:gesture.before});
+        }
         $undo.disabled=false;
         saveAnnotations();
       }
@@ -1500,7 +1575,7 @@ window.addEventListener('load', async ()=>{
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
-    if(annotationTool==='select'&&selectedAnnotation){
+    if(annotationTool==='select'&&selectedAnnotation&&selectedAnnotationList().length===1){
       const {p,annotation}=selectedAnnotation;
       const before=cloneAnnotation(annotation);
       annotation.color=annotationColor;
@@ -1512,14 +1587,14 @@ window.addEventListener('load', async ()=>{
     }
   }));
   $annotationFontSize.addEventListener('focus',()=>{
-    annotationFontEditBefore=annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'
+    annotationFontEditBefore=annotationTool==='select'&&selectedAnnotationList().length===1&&selectedAnnotation?.annotation.kind==='text'
       ? cloneAnnotation(selectedAnnotation.annotation)
       : null;
   });
   $annotationFontSize.addEventListener('change',()=>{
     annotationFontSize=clamp(parseInt($annotationFontSize.value,10)||DEFAULT_TEXT_FONT_PX,12,80);
     $annotationFontSize.value=String(annotationFontSize);
-    if(annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'){
+    if(annotationTool==='select'&&selectedAnnotationList().length===1&&selectedAnnotation?.annotation.kind==='text'){
       const {p,annotation}=selectedAnnotation;
       annotation.fontSize=annotationFontSize;
       if(annotationFontEditBefore&&annotationFontEditBefore.fontSize!==annotation.fontSize){
@@ -1536,7 +1611,7 @@ window.addEventListener('load', async ()=>{
     const value=parseInt($annotationFontSize.value,10);
     if(Number.isFinite(value)){
       annotationFontSize=clamp(value,12,80);
-      if(annotationTool==='select'&&selectedAnnotation?.annotation.kind==='text'){
+      if(annotationTool==='select'&&selectedAnnotationList().length===1&&selectedAnnotation?.annotation.kind==='text'){
         selectedAnnotation.annotation.fontSize=annotationFontSize;
         redrawOverlay(selectedAnnotation.p);
         redrawDraft(selectedAnnotation.p,null);
@@ -1553,7 +1628,7 @@ window.addEventListener('load', async ()=>{
     if(pendingTextAnnotation) finishInlineTextEditor(false);
     clearSelectedAnnotation(false);
     for(const p of pages){ p.annotations=[]; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(['annotation','annotation-transform','annotation-delete'].includes(historyStack[i].type)) historyStack.splice(i,1);
+    for(let i=historyStack.length-1;i>=0;i--) if(['annotation','annotation-transform','annotation-delete','annotation-transform-multiple','annotation-delete-multiple'].includes(historyStack[i].type)) historyStack.splice(i,1);
     $undo.disabled=historyStack.length===0;
     saveAnnotations();
   });
@@ -1575,8 +1650,21 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       if(annotationTool==='select') selectAnnotation(last.page,last.annotation);
+    }else if(last.type==='annotation-delete-multiple'){
+      for(const item of last.items){
+        const index=clamp(item.index,0,last.page.annotations.length);
+        last.page.annotations.splice(index,0,item.annotation);
+      }
+      saveAnnotations();
+      redrawOverlay(last.page);
+      if(annotationTool==='select') selectAnnotations(last.page,last.items.map(item=>item.annotation));
     }else if(last.type==='annotation-transform'){
       restoreAnnotation(last.annotation,last.before);
+      saveAnnotations();
+      redrawOverlay(last.page);
+      redrawDraft(last.page,null);
+    }else if(last.type==='annotation-transform-multiple'){
+      last.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,last.before[index]));
       saveAnnotations();
       redrawOverlay(last.page);
       redrawDraft(last.page,null);
