@@ -113,7 +113,8 @@
   .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
   .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
-  .inlineTextEditor{position:absolute;z-index:4;margin:0;padding:0;border:3px dashed currentColor;border-radius:2px;background:rgba(255,255,255,.08);outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;line-height:1.22;color:inherit;caret-color:currentColor;box-sizing:border-box}
+  .inlineTextEditorFrame{position:absolute;z-index:4;margin:0;padding:0;border:0;outline:3px dashed currentColor;outline-offset:0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;box-sizing:border-box}
+  .inlineTextEditor{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;color:inherit;caret-color:currentColor;box-sizing:border-box}
   .inlineTextEditor::placeholder{color:currentColor;opacity:.48}
   @media (max-width:760px){.annotationPopup{right:12px;top:64px}}
 
@@ -1022,14 +1023,25 @@ function updateInlineTextEditorScale(){
   if(!pendingTextAnnotation?.element) return;
   const {element,annotation}=pendingTextAnnotation;
   const scale=cssScaleFromPct();
-  element.style.fontSize=Math.max(8,annotation.fontSize*scale)+'px';
+  // Même taille CSS que le texte du canevas, y compris aux faibles zooms.
+  const fontSize=Math.max(1,annotation.fontSize*scale);
+  // Le canevas place le haut de l'em exactement sur annotation.y. Dans un
+  // textarea, la hauteur de ligne ajoute normalement la moitié de l'interligne
+  // au-dessus des lettres. On retire uniquement cet espace afin que le texte
+  // conserve exactement la même position pendant et après l'édition.
+  const lineHeight=Math.max(fontSize,Math.round(annotation.fontSize*1.22)*scale);
+  const leadingOffset=Math.max(0,(lineHeight-fontSize)/2);
+  element.style.fontSize=fontSize+'px';
+  element.style.lineHeight=lineHeight+'px';
+  element.style.top=(-leadingOffset)+'px';
+  element.style.height=`calc(100% + ${leadingOffset}px)`;
 }
 function finishInlineTextEditor(save=true){
   if(!pendingTextAnnotation) return;
   const pending=pendingTextAnnotation;
   pendingTextAnnotation=null;
   const text=pending.element.value.trim();
-  pending.element.remove();
+  pending.frame.remove();
   redrawDraft(pending.p,null);
   if(save && text){
     pending.annotation.text=text;
@@ -1054,18 +1066,21 @@ function openInlineTextEditor(p,annotation,isNew=true){
   // complètement la sélection bleue pendant la saisie afin qu'un double-clic
   // n'empile jamais deux encadrements autour du même texte.
   if(selectedAnnotation) clearSelectedAnnotation(false);
+  const frame=document.createElement('div');
+  frame.className='inlineTextEditorFrame';
+  frame.style.left=(annotation.x/p.w*100)+'%';
+  frame.style.top=(annotation.y/p.h*100)+'%';
+  frame.style.width=(annotation.w/p.w*100)+'%';
+  frame.style.height=(annotation.h/p.h*100)+'%';
+  frame.style.color=annotation.color;
   const textarea=document.createElement('textarea');
   textarea.className='inlineTextEditor';
   textarea.placeholder='Écris ici…';
   textarea.setAttribute('aria-label','Texte de l’annotation');
-  textarea.style.left=(annotation.x/p.w*100)+'%';
-  textarea.style.top=(annotation.y/p.h*100)+'%';
-  textarea.style.width=(annotation.w/p.w*100)+'%';
-  textarea.style.height=(annotation.h/p.h*100)+'%';
-  textarea.style.color=annotation.color;
   textarea.value=isNew?'':(annotation.text||'');
-  p.box.appendChild(textarea);
-  pendingTextAnnotation={p,annotation,element:textarea,isNew,before:cloneAnnotation(annotation)};
+  frame.appendChild(textarea);
+  p.box.appendChild(frame);
+  pendingTextAnnotation={p,annotation,frame,element:textarea,isNew,before:cloneAnnotation(annotation)};
   redrawOverlay(p);
   redrawDraft(p,null);
   updateInlineTextEditorScale();
