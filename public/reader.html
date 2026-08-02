@@ -130,7 +130,6 @@
     </div>
     <div class="row">
       <button class="btn btn-amber" id="fitWidth">Adapter à la largeur</button>
-      <button class="btn" id="resetZoom">100%</button>
     </div>
   </div>
 
@@ -201,7 +200,7 @@ const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById(
 const $landscape=document.getElementById('landscapeMode');
 const $book=document.getElementById('bookMode');
 const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoomOut');
-const $fitW=document.getElementById('fitWidth'), $z100=document.getElementById('resetZoom');
+const $fitW=document.getElementById('fitWidth');
 const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElementById('clear'), $revealAll=document.getElementById('revealAll');
 const $undo=document.getElementById('undo');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
@@ -862,7 +861,6 @@ window.addEventListener('load', async ()=>{
   document.getElementById('zoomIn').addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
   document.getElementById('zoomOut').addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
   document.getElementById('fitWidth').addEventListener('click',fitWidth);
-  document.getElementById('resetZoom').addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
   $tocButton.addEventListener('click',()=>{
