@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Version : pagination adaptée et rotation globale en mode paysage -->
+<!-- Version : pagination adaptée, rotation globale et glissement latéral libre -->
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
@@ -11,7 +11,7 @@
   html,body{height:100%}
   body{ margin:0; font:14px/1.45 system-ui,Arial; background:var(--bg); color:var(--ink);
         overflow-y:scroll; overflow-x:hidden; }
-  body.pan-enabled{overflow-x:auto}
+  body.pan-enabled{overflow-x:hidden}
   body.pan-enabled #viewport,
   body.pan-enabled .page,
   body.pan-enabled .box,
@@ -19,8 +19,7 @@
   body.pan-enabled .ov,
   body.pan-enabled .linksLayer{cursor:grab}
   body.pan-enabled .link-hotspot{cursor:pointer}
-  body.pan-enabled #viewport{touch-action:none}
-  body.pan-enabled .spread{justify-content:flex-start;width:max-content;min-width:100%}
+  body.pan-enabled #viewport{touch-action:none;will-change:transform}
   body.is-panning,
   body.is-panning #viewport,
   body.is-panning .page,
@@ -189,7 +188,7 @@ const TABLE_OF_CONTENTS_PAGE = 6;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
-let panEnabled=false, isPanning=false;
+let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = false;
 const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
@@ -252,17 +251,36 @@ function refreshFitWidthPct(){
 }
 function updatePanState(){
   const shouldEnable=!!firstPageWidth && zoomPct>fitZoomPct && !drawMode && !linkDrawMode;
-  if(shouldEnable===panEnabled) return;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
   if(!panEnabled){
     isPanning=false;
     document.body.classList.remove('is-panning');
-    if(window.scrollX) window.scrollTo(0,window.scrollY);
+    panX=0;
+    $viewport.style.removeProperty('transform');
+  }else{
+    panX=clamp(panX,-horizontalPanLimit(),horizontalPanLimit());
+    applyHorizontalPan();
   }
 }
+function horizontalPanLimit(){
+  const availableWidth=Math.max(1,$viewport.clientWidth);
+  const currentCard=pages[currentIndex]?.elPage||pages[0]?.elPage;
+  const currentRow=layout==='2up' ? currentCard?.closest('.spread') : currentCard;
+  const contentWidth=currentRow?.scrollWidth||currentRow?.offsetWidth||availableWidth;
+  const overflow=Math.max(0,(contentWidth-availableWidth)/2);
+  const extraPlay=clamp(Math.round(availableWidth*.32),180,380);
+  return Math.ceil(overflow+extraPlay);
+}
+function applyHorizontalPan(){
+  if(!panEnabled || Math.abs(panX)<.5){
+    $viewport.style.removeProperty('transform');
+    return;
+  }
+  $viewport.style.transform=`translate3d(${Math.round(panX)}px,0,0)`;
+}
 function attachPanHandlers(){
-  let pointerId=null, startX=0, startY=0, startScrollX=0, startScrollY=0;
+  let pointerId=null, startX=0, startY=0, startPanX=0, startScrollY=0, dragLimit=0;
 
   const stopPan=e=>{
     if(pointerId===null || (e && e.pointerId!==pointerId)) return;
@@ -279,8 +297,9 @@ function attachPanHandlers(){
     pointerId=e.pointerId;
     startX=e.clientX;
     startY=e.clientY;
-    startScrollX=window.scrollX;
+    startPanX=panX;
     startScrollY=window.scrollY;
+    dragLimit=horizontalPanLimit();
     isPanning=true;
     document.body.classList.add('is-panning');
     $viewport.setPointerCapture?.(pointerId);
@@ -289,7 +308,9 @@ function attachPanHandlers(){
 
   $viewport.addEventListener('pointermove',e=>{
     if(!isPanning || e.pointerId!==pointerId) return;
-    window.scrollTo(startScrollX-(e.clientX-startX),startScrollY-(e.clientY-startY));
+    panX=clamp(startPanX+(e.clientX-startX),-dragLimit,dragLimit);
+    applyHorizontalPan();
+    window.scrollTo(0,startScrollY-(e.clientY-startY));
     e.preventDefault();
   });
   $viewport.addEventListener('pointerup',stopPan);
