@@ -27,6 +27,7 @@
   body.is-panning .page img,
   body.is-panning .ov,
   body.is-panning .linksLayer{cursor:grabbing!important;user-select:none}
+  body.highlight-enabled .dr{cursor:crosshair;touch-action:none}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
   #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center; }
@@ -144,6 +145,14 @@
   </div>
 
   <div class="section">
+    <div class="row"><strong>Surlignage</strong></div>
+    <div class="row">
+      <button id="toggleHighlight" class="btn">Surligneur : OFF</button>
+      <button id="clearHighlights" class="btn">Effacer</button>
+    </div>
+  </div>
+
+  <div class="section">
     <div class="row"><strong>Liens</strong></div>
     <div class="row">
       <button id="linksToggle" class="btn btn-amber">Activer les liens</button>
@@ -184,9 +193,13 @@ const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
 const FRONT_MATTER_PAGES = 2;
 const TABLE_OF_CONTENTS_PAGE = 6;
+const HIGHLIGHT_COLOR = '#ffe100';
+const HIGHLIGHT_OPACITY = 0.36;
+const HIGHLIGHT_WIDTH_PX = 54;
+const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
+let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, highlightMode=false, linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = false;
@@ -203,6 +216,8 @@ const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoo
 const $fitW=document.getElementById('fitWidth');
 const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElementById('clear'), $revealAll=document.getElementById('revealAll');
 const $undo=document.getElementById('undo');
+const $toggleHighlight=document.getElementById('toggleHighlight');
+const $clearHighlights=document.getElementById('clearHighlights');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
 const $linksToggle=document.getElementById('linksToggle');
@@ -220,6 +235,7 @@ let currentIndex=0, firstPageWidth=null, firstPageHeight=null;
 /* Undo */
 const historyStack=[];
 let selectedLink=null;
+let storedHighlights=loadStoredHighlights();
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -232,6 +248,21 @@ const displayNumberFromIndex=index=>index===0?'0':index===1?'':String(index-1);
 const displayNumberFromPhysical=n=>displayNumberFromIndex(n-1);
 const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxième de couverture':`page ${n-FRONT_MATTER_PAGES}`;
 const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
+
+function loadStoredHighlights(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem(HIGHLIGHTS_STORAGE_KEY)||'{}');
+    return parsed && typeof parsed==='object' ? parsed : {};
+  }catch(_){ return {}; }
+}
+function saveHighlights(){
+  const saved={};
+  for(const p of pages){
+    if(p.highlights?.length) saved[String(p.idx)]=p.highlights;
+  }
+  storedHighlights=saved;
+  try{ localStorage.setItem(HIGHLIGHTS_STORAGE_KEY,JSON.stringify(saved)); }catch(_){}
+}
 
 /*** ZOOM ***/
 function fitWidthPct(){
@@ -250,7 +281,7 @@ function refreshFitWidthPct(){
 }
 function updatePanState(){
   const zoomAllowsPan=!!firstPageWidth && zoomPct>fitZoomPct;
-  const shouldEnable=zoomAllowsPan && !drawMode && !linkDrawMode;
+  const shouldEnable=zoomAllowsPan && !drawMode && !highlightMode && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
   if(!zoomAllowsPan){
@@ -296,7 +327,7 @@ function attachPanHandlers(){
   };
 
   $viewport.addEventListener('pointerdown',e=>{
-    if(!panEnabled || drawMode || linkDrawMode) return;
+    if(!panEnabled || drawMode || highlightMode || linkDrawMode) return;
     if(e.pointerType==='mouse' && e.button!==0) return;
     if(e.target.closest('.link-hotspot')) return;
     pointerId=e.pointerId;
@@ -512,8 +543,8 @@ function updateLinksInteractivity(){
   for(const p of pages){
     if(!p.linksLayer) continue;
     p.linksLayer.classList.toggle('links-hidden', !linksVisible);
-    p.linksLayer.classList.toggle('links-blocked', drawMode || linkDrawMode);
-    p.canDr.style.pointerEvents = (drawMode || linkDrawMode) ? 'auto' : 'none';
+    p.linksLayer.classList.toggle('links-blocked', drawMode || highlightMode || linkDrawMode);
+    p.canDr.style.pointerEvents = (drawMode || highlightMode || linkDrawMode) ? 'auto' : 'none';
   }
   updatePanState();
 }
@@ -550,6 +581,7 @@ function toggleLinks(on){
   linksVisible=!!on;
   if(linksVisible){
     toggleDrawMode(false);
+    toggleHighlightMode(false);
     linkDrawMode=false;
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
@@ -560,6 +592,7 @@ function toggleLinks(on){
 function toggleDrawMode(on){
   drawMode = on;
   if(drawMode){
+    toggleHighlightMode(false);
     linksVisible=false;
     linkDrawMode=false;
     $linksToggle.textContent='Activer les liens';
@@ -567,6 +600,22 @@ function toggleDrawMode(on){
   }
   $toggleRect.textContent='Locales : ' + (drawMode?'ON':'OFF');
   $toggleRect.classList.toggle('btn-dark',drawMode);
+  updateLinksInteractivity();
+}
+
+function toggleHighlightMode(on){
+  highlightMode=!!on;
+  if(highlightMode){
+    if(drawMode) toggleDrawMode(false);
+    linksVisible=false;
+    linkDrawMode=false;
+    $linksToggle.textContent='Activer les liens';
+    $linksToggle.classList.remove('btn-dark');
+    if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
+  }
+  document.body.classList.toggle('highlight-enabled',highlightMode);
+  $toggleHighlight.textContent='Surligneur : ' + (highlightMode?'ON':'OFF');
+  $toggleHighlight.classList.toggle('btn-amber',highlightMode);
   updateLinksInteractivity();
 }
 
@@ -608,21 +657,51 @@ function exportLinksFile(){
 function redrawOverlay(p){
   const ctx=p.canOv.getContext('2d');
   ctx.clearRect(0,0,p.w,p.h);
-  if(!p.imgCorr) return;
-  const corrW=p.corrNW||p.imgCorr.naturalWidth||p.w;
-  const corrH=p.corrNH||p.imgCorr.naturalHeight||p.h;
-  if(p.showAll){ ctx.drawImage(p.imgCorr,0,0,corrW,corrH,0,0,p.w,p.h); return; }
-  if(!p.zones || !p.zones.length) return;
-  const sX=p.w/corrW, sY=p.h/corrH;
-  for(const r of p.zones){
-    const sx=r.x/sX, sy=r.y/sY, sw=r.w/sX, sh=r.h/sY;
-    ctx.drawImage(p.imgCorr,sx,sy,sw,sh,r.x,r.y,r.w,r.h);
+  if(p.imgCorr){
+    const corrW=p.corrNW||p.imgCorr.naturalWidth||p.w;
+    const corrH=p.corrNH||p.imgCorr.naturalHeight||p.h;
+    if(p.showAll){
+      ctx.drawImage(p.imgCorr,0,0,corrW,corrH,0,0,p.w,p.h);
+    }else if(p.zones?.length){
+      const sX=p.w/corrW, sY=p.h/corrH;
+      for(const r of p.zones){
+        const sx=r.x/sX, sy=r.y/sY, sw=r.w/sX, sh=r.h/sY;
+        ctx.drawImage(p.imgCorr,sx,sy,sw,sh,r.x,r.y,r.w,r.h);
+      }
+    }
+  }
+  if(p.highlights?.length){
+    ctx.save();
+    ctx.globalAlpha=HIGHLIGHT_OPACITY;
+    ctx.strokeStyle=HIGHLIGHT_COLOR;
+    ctx.lineCap='round';
+    for(const line of p.highlights){
+      ctx.lineWidth=line.width||HIGHLIGHT_WIDTH_PX;
+      ctx.beginPath();
+      ctx.moveTo(line.x1,line.y);
+      ctx.lineTo(line.x2,line.y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }
 function redrawDraft(p,d){
   const ctx=p.canDr.getContext('2d');
   ctx.clearRect(0,0,p.w,p.h);
   if(!d) return;
+  if(d.kind==='highlight'){
+    ctx.save();
+    ctx.globalAlpha=HIGHLIGHT_OPACITY;
+    ctx.strokeStyle=HIGHLIGHT_COLOR;
+    ctx.lineWidth=HIGHLIGHT_WIDTH_PX;
+    ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(d.x,d.y);
+    ctx.lineTo(d.x2,d.y);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   ctx.setLineDash([]); ctx.strokeStyle='#9CA3AF'; ctx.lineWidth=3;
   const x=d.w>=0?d.x:d.x+d.w, y=d.h>=0?d.y:d.y+d.h;
   ctx.strokeRect(x,y,Math.abs(d.w),Math.abs(d.h));
@@ -639,15 +718,46 @@ function attachDrawHandlers(p){
     }
     return {x:(e.clientX-r.left)*(p.w/r.width),y:(e.clientY-r.top)*(p.h/r.height)};
   };
-  function down(e){ if(!drawMode&&!linkDrawMode) return; e.preventDefault(); draft=toLocal(e); draft.w=0; draft.h=0; redrawDraft(p,draft); }
-  function move(e){ if((!drawMode&&!linkDrawMode)||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
+  function down(e){
+    if(!drawMode&&!highlightMode&&!linkDrawMode) return;
+    e.preventDefault();
+    const start=toLocal(e);
+    if(highlightMode) draft={kind:'highlight',x:start.x,y:start.y,x2:start.x};
+    else { draft=start; draft.w=0; draft.h=0; }
+    redrawDraft(p,draft);
+  }
+  function move(e){
+    if((!drawMode&&!highlightMode&&!linkDrawMode)||!draft) return;
+    const m=toLocal(e);
+    if(draft.kind==='highlight') draft.x2=clamp(m.x,0,p.w);
+    else { draft.w=m.x-draft.x; draft.h=m.y-draft.y; }
+    redrawDraft(p,draft);
+  }
   function up(){
-    if((!drawMode&&!linkDrawMode)||!draft) return;
+    if((!drawMode&&!highlightMode&&!linkDrawMode)||!draft) return;
+    if(draft.kind==='highlight'){
+      const line={
+        x1:clamp(draft.x,0,p.w),
+        x2:clamp(draft.x2,0,p.w),
+        y:clamp(draft.y,0,p.h),
+        width:HIGHLIGHT_WIDTH_PX
+      };
+      draft=null;
+      if(Math.abs(line.x2-line.x1)>6){
+        p.highlights.push(line);
+        historyStack.push({type:'highlight',page:p,line});
+        $undo.disabled=false;
+        saveHighlights();
+        redrawOverlay(p);
+      }
+      redrawDraft(p,null);
+      return;
+    }
     const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+draft.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
     draft=null;
     if(r.w>6 && r.h>6){
       if(linkDrawMode) addEncodedLink(p,r);
-      else { p.zones.push(r); historyStack.push({page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
+      else { p.zones.push(r); historyStack.push({type:'correction',page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
     }
     redrawDraft(p,null);
   }
@@ -679,7 +789,8 @@ function makePage(n){
   const linksLayer=document.createElement('div'); linksLayer.className='linksLayer'; box.appendChild(linksLayer);
   box.appendChild(canDr);
 
-  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
+  const savedLines=Array.isArray(storedHighlights[String(n)]) ? storedHighlights[String(n)] : [];
+  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],highlights:savedLines,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
   pages.push(p);
 
   const corr=new Image(); corr.decoding='async'; corr.loading='eager'; corr.fetchPriority='high';
@@ -844,7 +955,7 @@ window.addEventListener('load', async ()=>{
         const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
         const n=parseInt(target,10); if(!Number.isInteger(n)||n<0||n>lastBookPage){ $linkEditorInfo.textContent=`Entre un numéro de page entre 0 et ${lastBookPage}.`; return; }
       }
-      toggleDrawMode(false); toggleLinks(false); linkDrawMode=true;
+      toggleDrawMode(false); toggleHighlightMode(false); toggleLinks(false); linkDrawMode=true;
       $linkDraw.textContent='Trace maintenant la zone sur la page';
       $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte à rendre cliquable.';
       updateLinksInteractivity();
@@ -886,6 +997,13 @@ window.addEventListener('load', async ()=>{
 
   document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
   document.getElementById('clear').addEventListener('click',()=>{ for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); } historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler'; });
+  $toggleHighlight.addEventListener('click',()=>toggleHighlightMode(!highlightMode));
+  $clearHighlights.addEventListener('click',()=>{
+    for(const p of pages){ p.highlights=[]; redrawOverlay(p); redrawDraft(p,null); }
+    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='highlight') historyStack.splice(i,1);
+    $undo.disabled=historyStack.length===0;
+    saveHighlights();
+  });
 
   $undo.addEventListener('click', doUndo);
   $undo.disabled = true;
@@ -893,7 +1011,17 @@ window.addEventListener('load', async ()=>{
     const allShown=!!pages[0]?.showAll;
     if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
     const last=historyStack.pop(); if(!last){ $undo.disabled=true; return; }
-    const {page,rect}=last; const i=page.zones.lastIndexOf(rect); if(i!==-1) page.zones.splice(i,1); redrawOverlay(page); $undo.disabled=historyStack.length===0;
+    if(last.type==='highlight'){
+      const i=last.page.highlights.lastIndexOf(last.line);
+      if(i!==-1) last.page.highlights.splice(i,1);
+      saveHighlights();
+      redrawOverlay(last.page);
+    }else{
+      const i=last.page.zones.lastIndexOf(last.rect);
+      if(i!==-1) last.page.zones.splice(i,1);
+      redrawOverlay(last.page);
+    }
+    $undo.disabled=historyStack.length===0;
   }
 
   document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler'; });
