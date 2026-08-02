@@ -257,6 +257,17 @@ function goto(by){
 function updateNavFromScroll(){
   const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
   cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
+
+  // En double page, les deux pages ont exactement la même visibilité.
+  // Si la page active appartient toujours à la double page visible, on la
+  // conserve comme ancre au lieu de la remplacer systématiquement par celle
+  // de gauche.
+  if(layout==='2up' && cards[currentIndex] && cards[best.idx]){
+    const currentSpread=cards[currentIndex].closest('.spread');
+    const bestSpread=cards[best.idx].closest('.spread');
+    if(currentSpread && currentSpread===bestSpread){ syncPageUI(); return; }
+  }
+
   currentIndex=best.idx; syncPageUI();
 }
 
@@ -524,7 +535,26 @@ function updateLayoutButtons(){
   $mode2.setAttribute('aria-pressed',String(!onePageActive));
 }
 
-function rebuild(){ if(layout==='1up') mount1up(); else mount2up(); updateLayoutButtons(); applyZoom(); updateNavFromScroll(); }
+function rebuild(){
+  // La position verticale ne représente plus la même page après un passage
+  // de 1 à 2 pages (ou inversement). On mémorise donc la page active, puis on
+  // rejoint la page ou la double page qui la contient après reconstruction.
+  const preservedIndex=clamp(currentIndex,0,Math.max(0,pages.length-1));
+  if(layout==='1up') mount1up(); else mount2up();
+  updateLayoutButtons();
+  applyZoom();
+  currentIndex=preservedIndex;
+  syncPageUI();
+  requestAnimationFrame(()=>{
+    const cards=cardsReal();
+    const card=cards[preservedIndex];
+    if(!card) return;
+    const target=layout==='2up' ? (card.closest('.spread')||card) : card;
+    target.scrollIntoView({behavior:'auto',block:'start'});
+    currentIndex=preservedIndex;
+    syncPageUI();
+  });
+}
 
 /*** DÉCOUVERTE AUTO DES PAGES ***/
 function testImage(url){
@@ -638,4 +668,3 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
-
