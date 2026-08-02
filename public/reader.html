@@ -113,6 +113,7 @@
   .annotationTool.selected{background:#111;color:#fff;border-color:#111}
   .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
   .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
+  .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
   .inlineTextEditorFrame{position:absolute;z-index:4;margin:0;padding:0;border:0;outline:3px dashed currentColor;outline-offset:0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;box-sizing:border-box}
   .inlineTextEditor{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;color:inherit;caret-color:currentColor;box-sizing:border-box}
@@ -218,7 +219,7 @@
   </div>
   <div class="annotationLabel"><label for="annotationFontSize">Taille de police</label></div>
   <div class="fontSizeRow">
-    <input id="annotationFontSize" class="fontSizeInput" type="number" min="12" max="80" step="1" value="34" inputmode="numeric" aria-label="Taille de la police" />
+    <input id="annotationFontSize" class="fontSizeInput" type="number" min="12" max="80" step="1" value="67" inputmode="numeric" aria-label="Taille de la police" />
     <span class="fontSizeUnit">px</span>
   </div>
   <div class="annotationLabel">Outil</div>
@@ -233,8 +234,8 @@
   </div>
   <div id="annotationHint" class="annotationHint">Choisis une couleur, puis un outil.</div>
   <div class="annotationActions">
-    <button id="stopAnnotation" class="btn" disabled>Fermer les annotations</button>
-    <button id="clearAnnotations" class="btn">Effacer les annotations</button>
+    <button id="annotationUndo" class="btn annotationHistoryButton" title="Revenir en arrière" aria-label="Revenir en arrière" disabled>↶</button>
+    <button id="annotationRedo" class="btn annotationHistoryButton" title="Revenir en avant" aria-label="Revenir en avant" disabled>↷</button>
   </div>
 </div>
 
@@ -261,7 +262,7 @@ const HIGHLIGHT_WIDTH_PX = 54;
 const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
 const ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
 const DRAW_WIDTH_PX = 7;
-const DEFAULT_TEXT_FONT_PX = 34;
+const DEFAULT_TEXT_FONT_PX = 67;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
@@ -285,8 +286,8 @@ const $openAnnotations=document.getElementById('openAnnotations');
 const $annotationPopup=document.getElementById('annotationPopup');
 const $annotationPopupHeader=$annotationPopup.querySelector('.annotationPopupHeader');
 const $closeAnnotations=document.getElementById('closeAnnotations');
-const $stopAnnotation=document.getElementById('stopAnnotation');
-const $clearAnnotations=document.getElementById('clearAnnotations');
+const $annotationUndo=document.getElementById('annotationUndo');
+const $annotationRedo=document.getElementById('annotationRedo');
 const $annotationHint=document.getElementById('annotationHint');
 const $annotationFontSize=document.getElementById('annotationFontSize');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
@@ -305,11 +306,23 @@ let currentIndex=0, firstPageWidth=null, firstPageHeight=null;
 
 /* Undo */
 const historyStack=[];
+const redoStack=[];
 let selectedLink=null;
 let storedAnnotations=loadStoredAnnotations();
 let pendingTextAnnotation=null;
 let selectedAnnotation=null;
 let annotationFontEditBefore=null;
+
+function updateHistoryButtons(){
+  $undo.disabled=historyStack.length===0;
+  $annotationUndo.disabled=historyStack.length===0;
+  $annotationRedo.disabled=redoStack.length===0;
+}
+function recordHistory(entry){
+  historyStack.push(entry);
+  redoStack.length=0;
+  updateHistoryButtons();
+}
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -690,7 +703,7 @@ function toggleDrawMode(on){
 const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
 const TOOL_HINTS={
   select:'Clique sur un élément ou trace un cadre autour de plusieurs éléments. Déplace la sélection ou appuie sur Suppr pour l’effacer.',
-  highlight:'Maintiens le clic et glisse : le surlignage restera horizontal.',
+  highlight:'Maintiens le clic et glisse pour surligner dans la direction souhaitée.',
   freehand:'Maintiens le clic et dessine librement sur la page.',
   rectangle:'Clique et glisse pour tracer un rectangle.',
   ellipse:'Clique et glisse pour tracer un cercle ou une ellipse.',
@@ -716,7 +729,6 @@ function setAnnotationTool(tool){
     button.classList.toggle('selected',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
-  $stopAnnotation.disabled=!annotationTool;
   $openAnnotations.classList.toggle('btn-amber',!!annotationTool);
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
@@ -742,7 +754,10 @@ function placeAnnotationPopupInWindow(){
 function openAnnotationPopup(){
   $annotationPopup.classList.add('open');
   $openAnnotations.setAttribute('aria-expanded','true');
+  annotationFontSize=DEFAULT_TEXT_FONT_PX;
+  $annotationFontSize.value=String(DEFAULT_TEXT_FONT_PX);
   if(!annotationTool) setAnnotationTool('select');
+  updateHistoryButtons();
   requestAnimationFrame(placeAnnotationPopupInWindow);
 }
 function closeAnnotationPopup(){
@@ -858,9 +873,11 @@ function drawAnnotation(ctx,a){
   ctx.lineCap='round';
   ctx.lineJoin='round';
   if(a.kind==='highlight'){
+    const y1=Number.isFinite(a.y1)?a.y1:a.y;
+    const y2=Number.isFinite(a.y2)?a.y2:a.y;
     ctx.globalAlpha=HIGHLIGHT_OPACITY;
     ctx.lineWidth=a.width||HIGHLIGHT_WIDTH_PX;
-    ctx.beginPath(); ctx.moveTo(a.x1,a.y); ctx.lineTo(a.x2,a.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(a.x1,y1); ctx.lineTo(a.x2,y2); ctx.stroke();
   }else if(a.kind==='freehand'){
     const points=a.points||[];
     if(points.length){
@@ -900,8 +917,10 @@ function restoreAnnotation(annotation,snapshot){
 function annotationBounds(a){
   if(!a) return null;
   if(a.kind==='highlight'){
+    const y1=Number.isFinite(a.y1)?a.y1:a.y;
+    const y2=Number.isFinite(a.y2)?a.y2:a.y;
     const half=(a.width||HIGHLIGHT_WIDTH_PX)/2;
-    return {x:Math.min(a.x1,a.x2),y:a.y-half,w:Math.abs(a.x2-a.x1),h:half*2};
+    return {x:Math.min(a.x1,a.x2)-half,y:Math.min(y1,y2)-half,w:Math.abs(a.x2-a.x1)+half*2,h:Math.abs(y2-y1)+half*2};
   }
   if(a.kind==='line'){
     return {x:Math.min(a.x1,a.x2),y:Math.min(a.y1,a.y2),w:Math.abs(a.x2-a.x1),h:Math.abs(a.y2-a.y1)};
@@ -930,8 +949,9 @@ function annotationContainsPoint(p,a,point){
   const tolerance=localUiSize(p,10);
   if(a.kind==='line') return distanceToSegment(point,{x:a.x1,y:a.y1},{x:a.x2,y:a.y2})<=tolerance+(a.width||DRAW_WIDTH_PX)/2;
   if(a.kind==='highlight'){
-    const left=Math.min(a.x1,a.x2)-tolerance, right=Math.max(a.x1,a.x2)+tolerance;
-    return point.x>=left&&point.x<=right&&Math.abs(point.y-a.y)<=(a.width||HIGHLIGHT_WIDTH_PX)/2+tolerance;
+    const y1=Number.isFinite(a.y1)?a.y1:a.y;
+    const y2=Number.isFinite(a.y2)?a.y2:a.y;
+    return distanceToSegment(point,{x:a.x1,y:y1},{x:a.x2,y:y2})<=tolerance+(a.width||HIGHLIGHT_WIDTH_PX)/2;
   }
   if(a.kind==='freehand'){
     const points=a.points||[];
@@ -1030,8 +1050,7 @@ function deleteSelectedAnnotation(){
   const deleted=annotations.map(annotation=>({annotation,index:p.annotations.indexOf(annotation)})).filter(item=>item.index!==-1);
   if(!deleted.length){ clearSelectedAnnotation(); return false; }
   deleted.sort((a,b)=>b.index-a.index).forEach(item=>p.annotations.splice(item.index,1));
-  historyStack.push({type:'annotation-delete-multiple',page:p,items:deleted.sort((a,b)=>a.index-b.index)});
-  $undo.disabled=false;
+  recordHistory({type:'annotation-delete-multiple',page:p,items:deleted.sort((a,b)=>a.index-b.index)});
   selectedAnnotation=null;
   saveAnnotations();
   redrawOverlay(p);
@@ -1040,7 +1059,15 @@ function deleteSelectedAnnotation(){
 }
 function translateAnnotation(annotation,dx,dy){
   if(['rectangle','ellipse','text'].includes(annotation.kind)){ annotation.x+=dx; annotation.y+=dy; return; }
-  if(annotation.kind==='highlight'){ annotation.x1+=dx; annotation.x2+=dx; annotation.y+=dy; return; }
+  if(annotation.kind==='highlight'){
+    annotation.x1+=dx; annotation.x2+=dx;
+    if(Number.isFinite(annotation.y1)||Number.isFinite(annotation.y2)){
+      annotation.y1=(Number.isFinite(annotation.y1)?annotation.y1:annotation.y)+dy;
+      annotation.y2=(Number.isFinite(annotation.y2)?annotation.y2:annotation.y)+dy;
+      delete annotation.y;
+    }else annotation.y+=dy;
+    return;
+  }
   if(annotation.kind==='line'){ annotation.x1+=dx; annotation.x2+=dx; annotation.y1+=dy; annotation.y2+=dy; return; }
   if(annotation.kind==='freehand') for(const point of annotation.points||[]){ point.x+=dx; point.y+=dy; }
 }
@@ -1097,7 +1124,7 @@ function redrawDraft(p,d){
     ctx.lineCap='round';
     ctx.beginPath();
     ctx.moveTo(d.x,d.y);
-    ctx.lineTo(d.x2,d.y);
+    ctx.lineTo(d.x2,d.y2);
     ctx.stroke();
     ctx.restore();
     return;
@@ -1122,8 +1149,7 @@ function normalizedBox(d){
 }
 function commitAnnotation(p,annotation){
   p.annotations.push(annotation);
-  historyStack.push({type:'annotation',page:p,annotation});
-  $undo.disabled=false;
+  recordHistory({type:'annotation',page:p,annotation,index:p.annotations.length-1});
   saveAnnotations();
   redrawOverlay(p);
 }
@@ -1156,8 +1182,7 @@ function finishInlineTextEditor(save=true){
     if(pending.isNew){
       commitAnnotation(pending.p,pending.annotation);
     }else{
-      historyStack.push({type:'annotation-transform',page:pending.p,annotation:pending.annotation,before:pending.before});
-      $undo.disabled=false;
+      recordHistory({type:'annotation-transform',page:pending.p,annotation:pending.annotation,before:pending.before,after:cloneAnnotation(pending.annotation)});
       saveAnnotations();
       redrawOverlay(pending.p);
     }
@@ -1252,7 +1277,7 @@ function attachDrawHandlers(p){
       document.body.classList.add('annotation-dragging');
       return;
     }
-    if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
+    if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,y2:start.y,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
     else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool) draft={kind:annotationTool,x:start.x,y:start.y,w:0,h:0,color:annotationColor,widthLine:DRAW_WIDTH_PX};
@@ -1277,7 +1302,10 @@ function attachDrawHandlers(p){
     }
     if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     const m=toLocal(e);
-    if(draft.kind==='highlight') draft.x2=clamp(m.x,0,p.w);
+    if(draft.kind==='highlight'){
+      draft.x2=clamp(m.x,0,p.w);
+      draft.y2=clamp(m.y,0,p.h);
+    }
     else if(draft.kind==='freehand'){
       const last=draft.points[draft.points.length-1];
       if(!last||Math.hypot(m.x-last.x,m.y-last.y)>2) draft.points.push({x:clamp(m.x,0,p.w),y:clamp(m.y,0,p.h)});
@@ -1304,11 +1332,10 @@ function attachDrawHandlers(p){
       }
       if(gesture.changed){
         if(gesture.annotations.length===1){
-          historyStack.push({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0]});
+          recordHistory({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0],after:cloneAnnotation(gesture.annotation)});
         }else{
-          historyStack.push({type:'annotation-transform-multiple',page:p,annotations:gesture.annotations,before:gesture.before});
+          recordHistory({type:'annotation-transform-multiple',page:p,annotations:gesture.annotations,before:gesture.before,after:gesture.annotations.map(cloneAnnotation)});
         }
-        $undo.disabled=false;
         saveAnnotations();
       }
       redrawOverlay(p);
@@ -1321,12 +1348,13 @@ function attachDrawHandlers(p){
         kind:'highlight',
         x1:clamp(draft.x,0,p.w),
         x2:clamp(draft.x2,0,p.w),
-        y:clamp(draft.y,0,p.h),
+        y1:clamp(draft.y,0,p.h),
+        y2:clamp(draft.y2,0,p.h),
         width:HIGHLIGHT_WIDTH_PX,
         color:draft.color
       };
       draft=null;
-      if(Math.abs(line.x2-line.x1)>6) commitAnnotation(p,line);
+      if(Math.hypot(line.x2-line.x1,line.y2-line.y1)>6) commitAnnotation(p,line);
       redrawDraft(p,null);
       return;
     }
@@ -1358,7 +1386,7 @@ function attachDrawHandlers(p){
     draft=null;
     if(r.w>6 && r.h>6){
       if(linkDrawMode) addEncodedLink(p,r);
-      else { p.zones.push(r); historyStack.push({type:'correction',page:p,rect:r}); $undo.disabled=historyStack.length===0; redrawOverlay(p); }
+      else { p.zones.push(r); recordHistory({type:'correction',page:p,rect:r,index:p.zones.length-1}); redrawOverlay(p); }
     }
     redrawDraft(p,null);
   }
@@ -1618,7 +1646,11 @@ window.addEventListener('load', async ()=>{
     if(e.key==='ArrowRight') goto(+1);
     if(e.key==='+'||e.key==='='){ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); }
     if(e.key==='-'||e.key==='_'){ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); }
-    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){ doUndo(); }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){
+      e.preventDefault();
+      if(e.shiftKey) doRedo(); else doUndo();
+    }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){ e.preventDefault(); doRedo(); }
   });
   window.addEventListener('scroll',scheduleNavFromScroll,{passive:true});
 
@@ -1626,7 +1658,8 @@ window.addEventListener('load', async ()=>{
   document.getElementById('clear').addEventListener('click',()=>{
     for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
     for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='correction') historyStack.splice(i,1);
-    $undo.disabled=historyStack.length===0;
+    for(let i=redoStack.length-1;i>=0;i--) if(redoStack[i].type==='correction') redoStack.splice(i,1);
+    updateHistoryButtons();
     $revealAll.textContent='Tout révéler';
   });
 
@@ -1641,8 +1674,7 @@ window.addEventListener('load', async ()=>{
       const {p,annotation}=selectedAnnotation;
       const before=cloneAnnotation(annotation);
       annotation.color=annotationColor;
-      historyStack.push({type:'annotation-transform',page:p,annotation,before});
-      $undo.disabled=false;
+      recordHistory({type:'annotation-transform',page:p,annotation,before,after:cloneAnnotation(annotation)});
       saveAnnotations();
       redrawOverlay(p);
       redrawDraft(p,null);
@@ -1660,8 +1692,7 @@ window.addEventListener('load', async ()=>{
       const {p,annotation}=selectedAnnotation;
       annotation.fontSize=annotationFontSize;
       if(annotationFontEditBefore&&annotationFontEditBefore.fontSize!==annotation.fontSize){
-        historyStack.push({type:'annotation-transform',page:p,annotation,before:annotationFontEditBefore});
-        $undo.disabled=false;
+        recordHistory({type:'annotation-transform',page:p,annotation,before:annotationFontEditBefore,after:cloneAnnotation(annotation)});
       }
       saveAnnotations();
       redrawOverlay(p);
@@ -1683,22 +1714,14 @@ window.addEventListener('load', async ()=>{
   document.querySelectorAll('.annotationTool').forEach(button=>button.addEventListener('click',()=>{
     setAnnotationTool(button.dataset.tool);
   }));
-  $stopAnnotation.addEventListener('click',closeAnnotationPopup);
-  $clearAnnotations.addEventListener('click',()=>{
-    if(!confirm('Effacer toutes les annotations enregistrées dans cette liseuse ?')) return;
-    if(pendingTextAnnotation) finishInlineTextEditor(false);
-    clearSelectedAnnotation(false);
-    for(const p of pages){ p.annotations=[]; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(['annotation','annotation-transform','annotation-delete','annotation-transform-multiple','annotation-delete-multiple'].includes(historyStack[i].type)) historyStack.splice(i,1);
-    $undo.disabled=historyStack.length===0;
-    saveAnnotations();
-  });
   $undo.addEventListener('click', doUndo);
-  $undo.disabled = true;
+  $annotationUndo.addEventListener('click',doUndo);
+  $annotationRedo.addEventListener('click',doRedo);
+  updateHistoryButtons();
   function doUndo(){
     const allShown=!!pages[0]?.showAll;
     if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
-    const last=historyStack.pop(); if(!last){ $undo.disabled=true; return; }
+    const last=historyStack.pop(); if(!last){ updateHistoryButtons(); return; }
     if(last.type==='annotation'){
       const i=last.page.annotations.lastIndexOf(last.annotation);
       if(i!==-1) last.page.annotations.splice(i,1);
@@ -1734,7 +1757,55 @@ window.addEventListener('load', async ()=>{
       if(i!==-1) last.page.zones.splice(i,1);
       redrawOverlay(last.page);
     }
-    $undo.disabled=historyStack.length===0;
+    redoStack.push(last);
+    updateHistoryButtons();
+  }
+  function doRedo(){
+    const next=redoStack.pop(); if(!next){ updateHistoryButtons(); return; }
+    if(next.type==='annotation'){
+      if(!next.page.annotations.includes(next.annotation)){
+        const index=clamp(Number.isInteger(next.index)?next.index:next.page.annotations.length,0,next.page.annotations.length);
+        next.page.annotations.splice(index,0,next.annotation);
+      }
+      saveAnnotations();
+      redrawOverlay(next.page);
+      if(annotationTool==='select') selectAnnotation(next.page,next.annotation);
+    }else if(next.type==='annotation-delete'){
+      const i=next.page.annotations.indexOf(next.annotation);
+      if(i!==-1) next.page.annotations.splice(i,1);
+      if(selectedAnnotation?.annotation===next.annotation) clearSelectedAnnotation(false);
+      saveAnnotations();
+      redrawOverlay(next.page);
+      redrawDraft(next.page,null);
+    }else if(next.type==='annotation-delete-multiple'){
+      const annotations=next.items.map(item=>item.annotation);
+      for(const annotation of annotations){
+        const i=next.page.annotations.indexOf(annotation);
+        if(i!==-1) next.page.annotations.splice(i,1);
+      }
+      if(selectedAnnotationList().some(annotation=>annotations.includes(annotation))) clearSelectedAnnotation(false);
+      saveAnnotations();
+      redrawOverlay(next.page);
+      redrawDraft(next.page,null);
+    }else if(next.type==='annotation-transform'){
+      restoreAnnotation(next.annotation,next.after||next.before);
+      saveAnnotations();
+      redrawOverlay(next.page);
+      redrawDraft(next.page,null);
+    }else if(next.type==='annotation-transform-multiple'){
+      next.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,next.after?.[index]||next.before[index]));
+      saveAnnotations();
+      redrawOverlay(next.page);
+      redrawDraft(next.page,null);
+    }else{
+      if(!next.page.zones.includes(next.rect)){
+        const index=clamp(Number.isInteger(next.index)?next.index:next.page.zones.length,0,next.page.zones.length);
+        next.page.zones.splice(index,0,next.rect);
+      }
+      redrawOverlay(next.page);
+    }
+    historyStack.push(next);
+    updateHistoryButtons();
   }
 
   document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler'; });
