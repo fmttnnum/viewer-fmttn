@@ -236,6 +236,7 @@
   <div class="annotationActions">
     <button id="annotationUndo" class="btn annotationHistoryButton" title="Revenir en arrière" aria-label="Revenir en arrière" disabled>↶</button>
     <button id="annotationRedo" class="btn annotationHistoryButton" title="Revenir en avant" aria-label="Revenir en avant" disabled>↷</button>
+    <button id="annotationClearAll" class="btn annotationHistoryButton" title="Effacer toutes les annotations" aria-label="Effacer toutes les annotations" disabled>🗑</button>
   </div>
 </div>
 
@@ -288,6 +289,7 @@ const $annotationPopupHeader=$annotationPopup.querySelector('.annotationPopupHea
 const $closeAnnotations=document.getElementById('closeAnnotations');
 const $annotationUndo=document.getElementById('annotationUndo');
 const $annotationRedo=document.getElementById('annotationRedo');
+const $annotationClearAll=document.getElementById('annotationClearAll');
 const $annotationHint=document.getElementById('annotationHint');
 const $annotationFontSize=document.getElementById('annotationFontSize');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
@@ -312,11 +314,13 @@ let storedAnnotations=loadStoredAnnotations();
 let pendingTextAnnotation=null;
 let selectedAnnotation=null;
 let annotationFontEditBefore=null;
+let activeAnnotationConstraintRefresh=null;
 
 function updateHistoryButtons(){
   $undo.disabled=historyStack.length===0;
   $annotationUndo.disabled=historyStack.length===0;
   $annotationRedo.disabled=redoStack.length===0;
+  $annotationClearAll.disabled=!pages.some(p=>p.annotations?.length);
 }
 function recordHistory(entry){
   historyStack.push(entry);
@@ -703,11 +707,11 @@ function toggleDrawMode(on){
 const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
 const TOOL_HINTS={
   select:'Clique sur un élément ou trace un cadre autour de plusieurs éléments. Déplace la sélection ou appuie sur Suppr pour l’effacer.',
-  highlight:'Maintiens le clic et glisse pour surligner dans la direction souhaitée.',
+  highlight:'Maintiens le clic et glisse. Garde Maj enfoncée pour un surlignage parfaitement horizontal.',
   freehand:'Maintiens le clic et dessine librement sur la page.',
-  rectangle:'Clique et glisse pour tracer un rectangle.',
-  ellipse:'Clique et glisse pour tracer un cercle ou une ellipse.',
-  line:'Clique et glisse pour tracer une ligne droite, dans n’importe quelle direction.',
+  rectangle:'Clique et glisse pour tracer un rectangle. Garde Maj enfoncée pour créer un carré.',
+  ellipse:'Clique et glisse pour tracer un cercle ou une ellipse. Garde Maj enfoncée pour créer un cercle parfait.',
+  line:'Clique et glisse dans n’importe quelle direction. Garde Maj enfoncée pour une ligne parfaitement horizontale.',
   text:'Clique et glisse pour créer la zone, puis écris directement dedans.'
 };
 function setAnnotationTool(tool){
@@ -1057,6 +1061,22 @@ function deleteSelectedAnnotation(){
   redrawDraft(p,null);
   return true;
 }
+function clearAllAnnotations(){
+  if(pendingTextAnnotation) finishInlineTextEditor(true);
+  const clearedPages=pages.map(page=>({
+    page,
+    items:(page.annotations||[]).map((annotation,index)=>({annotation,index}))
+  })).filter(entry=>entry.items.length);
+  if(!clearedPages.length){ updateHistoryButtons(); return; }
+  clearSelectedAnnotation(false);
+  for(const entry of clearedPages){
+    entry.page.annotations.length=0;
+    redrawOverlay(entry.page);
+    redrawDraft(entry.page,null);
+  }
+  recordHistory({type:'annotation-clear-all',pages:clearedPages});
+  saveAnnotations();
+}
 function translateAnnotation(annotation,dx,dy){
   if(['rectangle','ellipse','text'].includes(annotation.kind)){ annotation.x+=dx; annotation.y+=dy; return; }
   if(annotation.kind==='highlight'){
@@ -1232,6 +1252,7 @@ function openInlineTextEditor(p,annotation,isNew=true){
 function attachDrawHandlers(p){
   let draft=null;
   let selectionGesture=null;
+  let lastDraftPoint=null;
   const toLocal=e=>{
     const r=p.canDr.getBoundingClientRect();
     if(landscapeMode){
@@ -1242,6 +1263,38 @@ function attachDrawHandlers(p){
     }
     return {x:(e.clientX-r.left)*(p.w/r.width),y:(e.clientY-r.top)*(p.h/r.height)};
   };
+  function updateDraftFromPoint(point,constrain=false){
+    if(!draft) return;
+    if(draft.kind==='highlight'){
+      draft.x2=clamp(point.x,0,p.w);
+      draft.y2=constrain ? draft.y : clamp(point.y,0,p.h);
+    }else if(draft.kind==='freehand'){
+      const last=draft.points[draft.points.length-1];
+      if(!last||Math.hypot(point.x-last.x,point.y-last.y)>2){
+        draft.points.push({x:clamp(point.x,0,p.w),y:clamp(point.y,0,p.h)});
+      }
+    }else if(draft.kind==='line'){
+      draft.x2=clamp(point.x,0,p.w);
+      draft.y2=constrain ? draft.y1 : clamp(point.y,0,p.h);
+    }else if(constrain&&(draft.kind==='rectangle'||draft.kind==='ellipse')){
+      const dx=point.x-draft.x, dy=point.y-draft.y;
+      const signX=dx<0?-1:1, signY=dy<0?-1:1;
+      const maxHorizontal=signX<0?draft.x:p.w-draft.x;
+      const maxVertical=signY<0?draft.y:p.h-draft.y;
+      const side=Math.min(Math.max(Math.abs(dx),Math.abs(dy)),maxHorizontal,maxVertical);
+      draft.w=side*signX;
+      draft.h=side*signY;
+    }else{
+      draft.w=point.x-draft.x;
+      draft.h=point.y-draft.y;
+    }
+  }
+  function refreshDraftConstraint(constrain){
+    if(!draft||!lastDraftPoint) return;
+    if(!['highlight','line','rectangle','ellipse'].includes(draft.kind)) return;
+    updateDraftFromPoint(lastDraftPoint,constrain);
+    redrawDraft(p,draft);
+  }
   function down(e){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
     if(e.button!==undefined&&e.button!==0) return;
@@ -1282,6 +1335,8 @@ function attachDrawHandlers(p){
     else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool) draft={kind:annotationTool,x:start.x,y:start.y,w:0,h:0,color:annotationColor,widthLine:DRAW_WIDTH_PX};
     else { draft=start; draft.w=0; draft.h=0; }
+    lastDraftPoint=start;
+    activeAnnotationConstraintRefresh=refreshDraftConstraint;
     redrawDraft(p,draft);
   }
   function move(e){
@@ -1302,19 +1357,13 @@ function attachDrawHandlers(p){
     }
     if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     const m=toLocal(e);
-    if(draft.kind==='highlight'){
-      draft.x2=clamp(m.x,0,p.w);
-      draft.y2=clamp(m.y,0,p.h);
-    }
-    else if(draft.kind==='freehand'){
-      const last=draft.points[draft.points.length-1];
-      if(!last||Math.hypot(m.x-last.x,m.y-last.y)>2) draft.points.push({x:clamp(m.x,0,p.w),y:clamp(m.y,0,p.h)});
-    }
-    else if(draft.kind==='line'){ draft.x2=clamp(m.x,0,p.w); draft.y2=clamp(m.y,0,p.h); }
-    else { draft.w=m.x-draft.x; draft.h=m.y-draft.y; }
+    lastDraftPoint=m;
+    updateDraftFromPoint(m,e.shiftKey);
     redrawDraft(p,draft);
   }
   function up(){
+    activeAnnotationConstraintRefresh=null;
+    lastDraftPoint=null;
     if(selectionGesture){
       const gesture=selectionGesture;
       selectionGesture=null;
@@ -1632,6 +1681,9 @@ window.addEventListener('load', async ()=>{
     }
   });
   document.addEventListener('keydown',e=>{
+    if(e.key==='Shift'&&activeAnnotationConstraintRefresh){
+      activeAnnotationConstraintRefresh(true);
+    }
     if(e.key==='Escape'){
       if(pendingTextAnnotation){ finishInlineTextEditor(false); return; }
       if($annotationPopup.classList.contains('open')){ closeAnnotationPopup(); return; }
@@ -1651,6 +1703,11 @@ window.addEventListener('load', async ()=>{
       if(e.shiftKey) doRedo(); else doUndo();
     }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){ e.preventDefault(); doRedo(); }
+  });
+  document.addEventListener('keyup',e=>{
+    if(e.key==='Shift'&&activeAnnotationConstraintRefresh){
+      activeAnnotationConstraintRefresh(false);
+    }
   });
   window.addEventListener('scroll',scheduleNavFromScroll,{passive:true});
 
@@ -1717,6 +1774,7 @@ window.addEventListener('load', async ()=>{
   $undo.addEventListener('click', doUndo);
   $annotationUndo.addEventListener('click',doUndo);
   $annotationRedo.addEventListener('click',doRedo);
+  $annotationClearAll.addEventListener('click',clearAllAnnotations);
   updateHistoryButtons();
   function doUndo(){
     const allShown=!!pages[0]?.showAll;
@@ -1742,6 +1800,16 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       if(annotationTool==='select') selectAnnotations(last.page,last.items.map(item=>item.annotation));
+    }else if(last.type==='annotation-clear-all'){
+      for(const entry of last.pages){
+        for(const item of entry.items){
+          const index=clamp(item.index,0,entry.page.annotations.length);
+          entry.page.annotations.splice(index,0,item.annotation);
+        }
+        redrawOverlay(entry.page);
+        redrawDraft(entry.page,null);
+      }
+      saveAnnotations();
     }else if(last.type==='annotation-transform'){
       restoreAnnotation(last.annotation,last.before);
       saveAnnotations();
@@ -1787,6 +1855,17 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(next.page);
       redrawDraft(next.page,null);
+    }else if(next.type==='annotation-clear-all'){
+      clearSelectedAnnotation(false);
+      for(const entry of next.pages){
+        for(const item of entry.items){
+          const i=entry.page.annotations.indexOf(item.annotation);
+          if(i!==-1) entry.page.annotations.splice(i,1);
+        }
+        redrawOverlay(entry.page);
+        redrawDraft(entry.page,null);
+      }
+      saveAnnotations();
     }else if(next.type==='annotation-transform'){
       restoreAnnotation(next.annotation,next.after||next.before);
       saveAnnotations();
