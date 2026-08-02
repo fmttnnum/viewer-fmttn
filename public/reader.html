@@ -83,7 +83,7 @@
     <div class="row"><strong>Pages</strong></div>
     <div class="row">
       <button class="btn" id="tocButton">Table des matières</button>
-      <input id="pageJump" class="jump" type="number" min="0" step="1" placeholder="n°" />
+      <input id="pageJump" class="jump" type="text" inputmode="numeric" placeholder="n°" aria-label="Numéro de page" />
     </div>
   </div>
 
@@ -241,9 +241,22 @@ function fitWidth(){
 
 /*** NAV ***/
 function cardsReal(){ return [...document.querySelectorAll('.page:not(.spacer)')]; }
+function displayedPageNumbers(){
+  const currentCard=cardsReal()[currentIndex];
+  if(!currentCard) return [];
+
+  const visibleCards=layout==='2up'
+    ? [...(currentCard.closest('.spread')?.querySelectorAll('.page:not(.spacer)')||[currentCard])]
+    : [currentCard];
+
+  return visibleCards
+    .map(card=>pages.findIndex(p=>p.elPage===card))
+    .filter(index=>index>=0)
+    .map(displayNumberFromIndex)
+    .filter(number=>number!=='');
+}
 function syncPageUI(){
-  const displayed=displayNumberFromIndex(currentIndex);
-  $pageJump.value=displayed;
+  $pageJump.value=displayedPageNumbers().join(' – ');
 }
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
@@ -668,3 +681,4 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
