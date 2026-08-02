@@ -56,6 +56,7 @@
   .btn:disabled{opacity:.45;cursor:not-allowed}
   .btn-dark{background:#111;color:#fff;border-color:#111}
   .btn-amber{background:#ffd166;border-color:#e9b44e}
+  .btn-view-active{background:#d1d5db;border-color:#9ca3af;font-weight:700}
   .btn:active::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.08);}
   .pill{padding:6px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;min-width:44px;text-align:center}
   .jump{width:74px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px}
@@ -164,7 +165,7 @@ const corrPath = n => `${CORRECTIONS_ROOT}/${fileName(n)}`;
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
 const FRONT_MATTER_PAGES = 2;
-const TABLE_OF_CONTENTS_PAGE = 1;
+const TABLE_OF_CONTENTS_PAGE = 6;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
@@ -515,7 +516,15 @@ function mount2up(){
     for (let i=0;i<pages.length;i+=2){ const sp=document.createElement('div'); sp.className='spread'; sp.appendChild(pages[i].elPage); if(pages[i+1]) sp.appendChild(pages[i+1].elPage); $viewport.appendChild(sp); }
   }
 }
-function rebuild(){ if(layout==='1up') mount1up(); else mount2up(); applyZoom(); updateNavFromScroll(); }
+function updateLayoutButtons(){
+  const onePageActive=layout==='1up';
+  $mode1.classList.toggle('btn-view-active',onePageActive);
+  $mode2.classList.toggle('btn-view-active',!onePageActive);
+  $mode1.setAttribute('aria-pressed',String(onePageActive));
+  $mode2.setAttribute('aria-pressed',String(!onePageActive));
+}
+
+function rebuild(){ if(layout==='1up') mount1up(); else mount2up(); updateLayoutButtons(); applyZoom(); updateNavFromScroll(); }
 
 /*** DÉCOUVERTE AUTO DES PAGES ***/
 function testImage(url){
@@ -629,3 +638,4 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
