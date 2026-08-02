@@ -198,7 +198,7 @@ const $linkDeleteSelected=document.getElementById('linkDeleteSelected');
 const $linkEditorInfo=document.getElementById('linkEditorInfo');
 
 const pages=[]; // objets pages
-let currentIndex=0, firstPageWidth=null;
+let currentIndex=0, firstPageWidth=null, firstPageHeight=null;
 
 /* Undo */
 const historyStack=[];
@@ -299,7 +299,24 @@ function goToEnteredPage(){
 }
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
-  currentIndex=target; syncPageUI(); cards[target].scrollIntoView({behavior:'smooth',block:'start'});
+  currentIndex=target;
+  syncPageUI();
+  cards[target].scrollIntoView({behavior:'auto',block:'start'});
+
+  // Si l'image visée termine son chargement juste après le saut, on recale
+  // une fois la page. Cela évite qu'elle soit repoussée par les images qui
+  // prennent leur hauteur définitive au même moment.
+  const targetPage=pages[target];
+  if(targetPage && !targetPage.imgDoc.complete){
+    targetPage.imgDoc.addEventListener('load',()=>{
+      requestAnimationFrame(()=>{
+        const card=cardsReal()[target];
+        if(card) card.scrollIntoView({behavior:'auto',block:'start'});
+        currentIndex=target;
+        syncPageUI();
+      });
+    },{once:true});
+  }
 }
 function goto(by){
   const cards=cardsReal(); const top=window.scrollY+4; let best={idx:0,dy:1e9};
@@ -564,7 +581,20 @@ function makePage(n){
   img.addEventListener('load',()=>{ 
     p.w=img.naturalWidth; p.h=img.naturalHeight;
     canOv.width=canDr.width=p.w; canOv.height=canDr.height=p.h;
-    if(!firstPageWidth) firstPageWidth=p.w;
+    if(!firstPageWidth){
+      firstPageWidth=p.w;
+      firstPageHeight=p.h;
+
+      // Toutes les pages occupent immédiatement leur place dans le document,
+      // même si leurs PNG restent chargés progressivement par le navigateur.
+      // La navigation peut donc atteindre directement une page éloignée.
+      for(const other of pages){
+        if(!other.w || !other.h){
+          other.w=firstPageWidth;
+          other.h=firstPageHeight;
+        }
+      }
+    }
     applyZoom();
     redrawOverlay(p); redrawDraft(p,null);
     attachDrawHandlers(p);
@@ -749,5 +779,3 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
-
-
