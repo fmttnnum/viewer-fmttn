@@ -169,7 +169,7 @@
     <div class="row"><strong>Corrections</strong></div>
     <div class="row">
       <button id="toggleRect" class="btn btn-dark">Locales : OFF</button>
-      <button id="undo" class="btn" title="Revenir en arrière (Ctrl+Z)">↶</button>
+      <button id="undo" class="btn" title="Annuler la dernière correction locale (Ctrl+Z)" aria-label="Annuler la dernière correction locale">↶</button>
       <button id="clear" class="btn">Effacer</button>
     </div>
     <button id="revealAll" class="btn btn-amber" disabled>Préchargement… 0%</button>
@@ -234,8 +234,8 @@
   </div>
   <div id="annotationHint" class="annotationHint">Choisis une couleur, puis un outil.</div>
   <div class="annotationActions">
-    <button id="annotationUndo" class="btn annotationHistoryButton" title="Revenir en arrière" aria-label="Revenir en arrière" disabled>↶</button>
-    <button id="annotationRedo" class="btn annotationHistoryButton" title="Revenir en avant" aria-label="Revenir en avant" disabled>↷</button>
+    <button id="annotationUndo" class="btn annotationHistoryButton" title="Annuler la dernière action d'annotation" aria-label="Annuler la dernière action d'annotation" disabled>↶</button>
+    <button id="annotationRedo" class="btn annotationHistoryButton" title="Rétablir la dernière action d'annotation" aria-label="Rétablir la dernière action d'annotation" disabled>↷</button>
     <button id="annotationClearAll" class="btn annotationHistoryButton" title="Effacer toutes les annotations" aria-label="Effacer toutes les annotations" disabled>🗑</button>
   </div>
 </div>
@@ -306,9 +306,10 @@ const $linkEditorInfo=document.getElementById('linkEditorInfo');
 const pages=[]; // objets pages
 let currentIndex=0, firstPageWidth=null, firstPageHeight=null;
 
-/* Undo */
-const historyStack=[];
-const redoStack=[];
+/* Historiques indépendants : corrections locales et annotations */
+const correctionHistoryStack=[];
+const annotationHistoryStack=[];
+const annotationRedoStack=[];
 let selectedLink=null;
 let storedAnnotations=loadStoredAnnotations();
 let pendingTextAnnotation=null;
@@ -317,14 +318,18 @@ let annotationFontEditBefore=null;
 let activeAnnotationConstraintRefresh=null;
 
 function updateHistoryButtons(){
-  $undo.disabled=historyStack.length===0;
-  $annotationUndo.disabled=historyStack.length===0;
-  $annotationRedo.disabled=redoStack.length===0;
+  $undo.disabled=correctionHistoryStack.length===0;
+  $annotationUndo.disabled=annotationHistoryStack.length===0;
+  $annotationRedo.disabled=annotationRedoStack.length===0;
   $annotationClearAll.disabled=!pages.some(p=>p.annotations?.length);
 }
-function recordHistory(entry){
-  historyStack.push(entry);
-  redoStack.length=0;
+function recordCorrectionHistory(entry){
+  correctionHistoryStack.push(entry);
+  updateHistoryButtons();
+}
+function recordAnnotationHistory(entry){
+  annotationHistoryStack.push(entry);
+  annotationRedoStack.length=0;
   updateHistoryButtons();
 }
 
@@ -1054,7 +1059,7 @@ function deleteSelectedAnnotation(){
   const deleted=annotations.map(annotation=>({annotation,index:p.annotations.indexOf(annotation)})).filter(item=>item.index!==-1);
   if(!deleted.length){ clearSelectedAnnotation(); return false; }
   deleted.sort((a,b)=>b.index-a.index).forEach(item=>p.annotations.splice(item.index,1));
-  recordHistory({type:'annotation-delete-multiple',page:p,items:deleted.sort((a,b)=>a.index-b.index)});
+  recordAnnotationHistory({type:'annotation-delete-multiple',page:p,items:deleted.sort((a,b)=>a.index-b.index)});
   selectedAnnotation=null;
   saveAnnotations();
   redrawOverlay(p);
@@ -1074,7 +1079,7 @@ function clearAllAnnotations(){
     redrawOverlay(entry.page);
     redrawDraft(entry.page,null);
   }
-  recordHistory({type:'annotation-clear-all',pages:clearedPages});
+  recordAnnotationHistory({type:'annotation-clear-all',pages:clearedPages});
   saveAnnotations();
 }
 function translateAnnotation(annotation,dx,dy){
@@ -1169,7 +1174,7 @@ function normalizedBox(d){
 }
 function commitAnnotation(p,annotation){
   p.annotations.push(annotation);
-  recordHistory({type:'annotation',page:p,annotation,index:p.annotations.length-1});
+  recordAnnotationHistory({type:'annotation',page:p,annotation,index:p.annotations.length-1});
   saveAnnotations();
   redrawOverlay(p);
 }
@@ -1202,7 +1207,7 @@ function finishInlineTextEditor(save=true){
     if(pending.isNew){
       commitAnnotation(pending.p,pending.annotation);
     }else{
-      recordHistory({type:'annotation-transform',page:pending.p,annotation:pending.annotation,before:pending.before,after:cloneAnnotation(pending.annotation)});
+      recordAnnotationHistory({type:'annotation-transform',page:pending.p,annotation:pending.annotation,before:pending.before,after:cloneAnnotation(pending.annotation)});
       saveAnnotations();
       redrawOverlay(pending.p);
     }
@@ -1381,9 +1386,9 @@ function attachDrawHandlers(p){
       }
       if(gesture.changed){
         if(gesture.annotations.length===1){
-          recordHistory({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0],after:cloneAnnotation(gesture.annotation)});
+          recordAnnotationHistory({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0],after:cloneAnnotation(gesture.annotation)});
         }else{
-          recordHistory({type:'annotation-transform-multiple',page:p,annotations:gesture.annotations,before:gesture.before,after:gesture.annotations.map(cloneAnnotation)});
+          recordAnnotationHistory({type:'annotation-transform-multiple',page:p,annotations:gesture.annotations,before:gesture.before,after:gesture.annotations.map(cloneAnnotation)});
         }
         saveAnnotations();
       }
@@ -1435,7 +1440,7 @@ function attachDrawHandlers(p){
     draft=null;
     if(r.w>6 && r.h>6){
       if(linkDrawMode) addEncodedLink(p,r);
-      else { p.zones.push(r); recordHistory({type:'correction',page:p,rect:r,index:p.zones.length-1}); redrawOverlay(p); }
+      else { p.zones.push(r); recordCorrectionHistory({page:p,rect:r,index:p.zones.length-1}); redrawOverlay(p); }
     }
     redrawDraft(p,null);
   }
@@ -1700,9 +1705,18 @@ window.addEventListener('load', async ()=>{
     if(e.key==='-'||e.key==='_'){ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){
       e.preventDefault();
-      if(e.shiftKey) doRedo(); else doUndo();
+      if($annotationPopup.classList.contains('open')){
+        if(e.shiftKey) doAnnotationRedo(); else doAnnotationUndo();
+      }else if(!e.shiftKey){
+        undoLocalCorrection();
+      }
     }
-    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){ e.preventDefault(); doRedo(); }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){
+      if($annotationPopup.classList.contains('open')){
+        e.preventDefault();
+        doAnnotationRedo();
+      }
+    }
   });
   document.addEventListener('keyup',e=>{
     if(e.key==='Shift'&&activeAnnotationConstraintRefresh){
@@ -1714,8 +1728,7 @@ window.addEventListener('load', async ()=>{
   document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
   document.getElementById('clear').addEventListener('click',()=>{
     for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='correction') historyStack.splice(i,1);
-    for(let i=redoStack.length-1;i>=0;i--) if(redoStack[i].type==='correction') redoStack.splice(i,1);
+    correctionHistoryStack.length=0;
     updateHistoryButtons();
     $revealAll.textContent='Tout révéler';
   });
@@ -1731,7 +1744,7 @@ window.addEventListener('load', async ()=>{
       const {p,annotation}=selectedAnnotation;
       const before=cloneAnnotation(annotation);
       annotation.color=annotationColor;
-      recordHistory({type:'annotation-transform',page:p,annotation,before,after:cloneAnnotation(annotation)});
+      recordAnnotationHistory({type:'annotation-transform',page:p,annotation,before,after:cloneAnnotation(annotation)});
       saveAnnotations();
       redrawOverlay(p);
       redrawDraft(p,null);
@@ -1749,7 +1762,7 @@ window.addEventListener('load', async ()=>{
       const {p,annotation}=selectedAnnotation;
       annotation.fontSize=annotationFontSize;
       if(annotationFontEditBefore&&annotationFontEditBefore.fontSize!==annotation.fontSize){
-        recordHistory({type:'annotation-transform',page:p,annotation,before:annotationFontEditBefore,after:cloneAnnotation(annotation)});
+        recordAnnotationHistory({type:'annotation-transform',page:p,annotation,before:annotationFontEditBefore,after:cloneAnnotation(annotation)});
       }
       saveAnnotations();
       redrawOverlay(p);
@@ -1771,15 +1784,22 @@ window.addEventListener('load', async ()=>{
   document.querySelectorAll('.annotationTool').forEach(button=>button.addEventListener('click',()=>{
     setAnnotationTool(button.dataset.tool);
   }));
-  $undo.addEventListener('click', doUndo);
-  $annotationUndo.addEventListener('click',doUndo);
-  $annotationRedo.addEventListener('click',doRedo);
+  $undo.addEventListener('click',undoLocalCorrection);
+  $annotationUndo.addEventListener('click',doAnnotationUndo);
+  $annotationRedo.addEventListener('click',doAnnotationRedo);
   $annotationClearAll.addEventListener('click',clearAllAnnotations);
   updateHistoryButtons();
-  function doUndo(){
-    const allShown=!!pages[0]?.showAll;
-    if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
-    const last=historyStack.pop(); if(!last){ updateHistoryButtons(); return; }
+  function undoLocalCorrection(){
+    const last=correctionHistoryStack.pop();
+    if(last){
+      const i=last.page.zones.lastIndexOf(last.rect);
+      if(i!==-1) last.page.zones.splice(i,1);
+      redrawOverlay(last.page);
+    }
+    updateHistoryButtons();
+  }
+  function doAnnotationUndo(){
+    const last=annotationHistoryStack.pop(); if(!last){ updateHistoryButtons(); return; }
     if(last.type==='annotation'){
       const i=last.page.annotations.lastIndexOf(last.annotation);
       if(i!==-1) last.page.annotations.splice(i,1);
@@ -1820,16 +1840,12 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       redrawDraft(last.page,null);
-    }else{
-      const i=last.page.zones.lastIndexOf(last.rect);
-      if(i!==-1) last.page.zones.splice(i,1);
-      redrawOverlay(last.page);
     }
-    redoStack.push(last);
+    annotationRedoStack.push(last);
     updateHistoryButtons();
   }
-  function doRedo(){
-    const next=redoStack.pop(); if(!next){ updateHistoryButtons(); return; }
+  function doAnnotationRedo(){
+    const next=annotationRedoStack.pop(); if(!next){ updateHistoryButtons(); return; }
     if(next.type==='annotation'){
       if(!next.page.annotations.includes(next.annotation)){
         const index=clamp(Number.isInteger(next.index)?next.index:next.page.annotations.length,0,next.page.annotations.length);
@@ -1876,14 +1892,8 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(next.page);
       redrawDraft(next.page,null);
-    }else{
-      if(!next.page.zones.includes(next.rect)){
-        const index=clamp(Number.isInteger(next.index)?next.index:next.page.zones.length,0,next.page.zones.length);
-        next.page.zones.splice(index,0,next.rect);
-      }
-      redrawOverlay(next.page);
     }
-    historyStack.push(next);
+    annotationHistoryStack.push(next);
     updateHistoryButtons();
   }
 
