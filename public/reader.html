@@ -27,7 +27,8 @@
   body.is-panning .page img,
   body.is-panning .ov,
   body.is-panning .linksLayer{cursor:grabbing!important;user-select:none}
-  body.highlight-enabled .dr{cursor:crosshair;touch-action:none}
+  body.annotation-enabled .dr{cursor:crosshair;touch-action:none}
+  body.annotation-text .dr{cursor:text}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
   #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center; }
@@ -89,6 +90,29 @@
   .badge{ position:absolute; top:8px; right:8px; background:#111; color:#fff; font:500 12px/1 system-ui,Arial; padding:4px 8px; border-radius:999px; pointer-events:none; }
   .badge.warn{ background:var(--warn) }
 
+  /* fenêtre des annotations */
+  .annotationPopup{position:fixed;right:294px;top:116px;width:310px;max-width:calc(100vw - 24px);background:#fff;border:1px solid #d1d5db;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:14px;z-index:40;display:none;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .annotationPopup.open{display:block}
+  .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .annotationPopupTitle{font-size:17px;font-weight:700}
+  .annotationClose{width:32px;height:32px;padding:0;font-size:20px;line-height:1}
+  .annotationLabel{font-weight:700;margin:9px 0 6px}
+  .colorGrid{display:flex;gap:10px;margin-bottom:12px}
+  .colorChoice{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #9ca3af;cursor:pointer;padding:0}
+  .colorChoice.selected{box-shadow:0 0 0 3px #111}
+  .annotationTools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .annotationTool{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:40px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .annotationTool.selected{background:#111;color:#fff;border-color:#111}
+  .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
+  .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
+  .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
+  .textDialogBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
+  .textDialogBackdrop.open{display:flex}
+  .textDialog{width:min(440px,100%);background:#fff;border-radius:16px;box-shadow:0 22px 60px rgba(0,0,0,.25);padding:16px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .textDialog textarea{width:100%;min-height:130px;resize:vertical;border:1px solid #9ca3af;border-radius:10px;padding:10px;font:18px/1.3 Calibri,"Carlito","Segoe UI",sans-serif;margin:10px 0}
+  .textDialogActions{display:flex;justify-content:flex-end;gap:8px}
+  @media (max-width:760px){.annotationPopup{right:12px;top:64px}}
+
   /* on masque la légende numérotée */
   .num{display:none!important}
 </style>
@@ -145,10 +169,9 @@
   </div>
 
   <div class="section">
-    <div class="row"><strong>Surlignage</strong></div>
+    <div class="row"><strong>Annotations</strong></div>
     <div class="row">
-      <button id="toggleHighlight" class="btn">Surligneur : OFF</button>
-      <button id="clearHighlights" class="btn">Effacer</button>
+      <button id="openAnnotations" class="btn">Ouvrir les annotations</button>
     </div>
   </div>
 
@@ -175,6 +198,45 @@
   <div class="mascot"><img src="./mascotte.png" alt="Mascotte FMttn" draggable="false" /></div>
 </aside>
 
+<div id="annotationPopup" class="annotationPopup" role="dialog" aria-modal="false" aria-labelledby="annotationPopupTitle">
+  <div class="annotationPopupHeader">
+    <div id="annotationPopupTitle" class="annotationPopupTitle">Annotations</div>
+    <button id="closeAnnotations" class="btn annotationClose" title="Fermer" aria-label="Fermer">×</button>
+  </div>
+  <div class="annotationLabel">Couleur</div>
+  <div class="colorGrid" role="group" aria-label="Couleur de l'annotation">
+    <button class="colorChoice selected" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
+    <button class="colorChoice" data-color="#ef4444" style="background:#ef4444" title="Rouge" aria-label="Rouge"></button>
+    <button class="colorChoice" data-color="#22c55e" style="background:#22c55e" title="Vert" aria-label="Vert"></button>
+    <button class="colorChoice" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
+  </div>
+  <div class="annotationLabel">Outil</div>
+  <div class="annotationTools">
+    <button class="btn annotationTool" data-tool="highlight"><span class="toolIcon">▰</span>Surligneur</button>
+    <button class="btn annotationTool" data-tool="freehand"><span class="toolIcon">✎</span>Dessin libre</button>
+    <button class="btn annotationTool" data-tool="rectangle"><span class="toolIcon">▭</span>Rectangle</button>
+    <button class="btn annotationTool" data-tool="ellipse"><span class="toolIcon">◯</span>Cercle</button>
+    <button class="btn annotationTool" data-tool="line"><span class="toolIcon">╱</span>Ligne</button>
+    <button class="btn annotationTool" data-tool="text"><span class="toolIcon">T</span>Texte</button>
+  </div>
+  <div id="annotationHint" class="annotationHint">Choisis une couleur, puis un outil.</div>
+  <div class="annotationActions">
+    <button id="stopAnnotation" class="btn" disabled>Arrêter l'outil</button>
+    <button id="clearAnnotations" class="btn">Effacer les annotations</button>
+  </div>
+</div>
+
+<div id="textDialogBackdrop" class="textDialogBackdrop" role="dialog" aria-modal="true" aria-labelledby="textDialogTitle">
+  <div class="textDialog">
+    <strong id="textDialogTitle">Ajouter un texte</strong>
+    <textarea id="annotationTextInput" placeholder="Écris ton annotation ici…"></textarea>
+    <div class="textDialogActions">
+      <button id="cancelAnnotationText" class="btn">Annuler</button>
+      <button id="saveAnnotationText" class="btn btn-dark">Ajouter</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap"><div id="viewport" aria-live="polite" class="flow-1up"></div></div>
 
 <script>
@@ -193,13 +255,15 @@ const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
 const FRONT_MATTER_PAGES = 2;
 const TABLE_OF_CONTENTS_PAGE = 6;
-const HIGHLIGHT_COLOR = '#ffe100';
 const HIGHLIGHT_OPACITY = 0.36;
 const HIGHLIGHT_WIDTH_PX = 54;
 const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
+const ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
+const DRAW_WIDTH_PX = 7;
+const TEXT_FONT_PX = 34;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, highlightMode=false, linksVisible=false, linkDrawMode=false;
+let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = false;
@@ -216,8 +280,16 @@ const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoo
 const $fitW=document.getElementById('fitWidth');
 const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElementById('clear'), $revealAll=document.getElementById('revealAll');
 const $undo=document.getElementById('undo');
-const $toggleHighlight=document.getElementById('toggleHighlight');
-const $clearHighlights=document.getElementById('clearHighlights');
+const $openAnnotations=document.getElementById('openAnnotations');
+const $annotationPopup=document.getElementById('annotationPopup');
+const $closeAnnotations=document.getElementById('closeAnnotations');
+const $stopAnnotation=document.getElementById('stopAnnotation');
+const $clearAnnotations=document.getElementById('clearAnnotations');
+const $annotationHint=document.getElementById('annotationHint');
+const $textDialogBackdrop=document.getElementById('textDialogBackdrop');
+const $annotationTextInput=document.getElementById('annotationTextInput');
+const $saveAnnotationText=document.getElementById('saveAnnotationText');
+const $cancelAnnotationText=document.getElementById('cancelAnnotationText');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
 const $linksToggle=document.getElementById('linksToggle');
@@ -235,7 +307,8 @@ let currentIndex=0, firstPageWidth=null, firstPageHeight=null;
 /* Undo */
 const historyStack=[];
 let selectedLink=null;
-let storedHighlights=loadStoredHighlights();
+let storedAnnotations=loadStoredAnnotations();
+let pendingTextAnnotation=null;
 
 /* spacer pour mode livre */
 const spacer=document.createElement('div'); spacer.className='page spacer';
@@ -249,19 +322,27 @@ const displayNumberFromPhysical=n=>displayNumberFromIndex(n-1);
 const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxième de couverture':`page ${n-FRONT_MATTER_PAGES}`;
 const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
 
-function loadStoredHighlights(){
+function loadStoredAnnotations(){
   try{
-    const parsed=JSON.parse(localStorage.getItem(HIGHLIGHTS_STORAGE_KEY)||'{}');
-    return parsed && typeof parsed==='object' ? parsed : {};
+    const parsed=JSON.parse(localStorage.getItem(ANNOTATIONS_STORAGE_KEY)||'null');
+    if(parsed && typeof parsed==='object') return parsed;
+  }catch(_){ return {}; }
+  try{
+    const old=JSON.parse(localStorage.getItem(HIGHLIGHTS_STORAGE_KEY)||'{}');
+    const migrated={};
+    for(const [page,lines] of Object.entries(old||{})){
+      if(Array.isArray(lines)) migrated[page]=lines.map(line=>({kind:'highlight',x1:line.x1,x2:line.x2,y:line.y,width:line.width||HIGHLIGHT_WIDTH_PX,color:'#ffe100'}));
+    }
+    return migrated;
   }catch(_){ return {}; }
 }
-function saveHighlights(){
+function saveAnnotations(){
   const saved={};
   for(const p of pages){
-    if(p.highlights?.length) saved[String(p.idx)]=p.highlights;
+    if(p.annotations?.length) saved[String(p.idx)]=p.annotations;
   }
-  storedHighlights=saved;
-  try{ localStorage.setItem(HIGHLIGHTS_STORAGE_KEY,JSON.stringify(saved)); }catch(_){}
+  storedAnnotations=saved;
+  try{ localStorage.setItem(ANNOTATIONS_STORAGE_KEY,JSON.stringify(saved)); }catch(_){}
 }
 
 /*** ZOOM ***/
@@ -281,7 +362,7 @@ function refreshFitWidthPct(){
 }
 function updatePanState(){
   const zoomAllowsPan=!!firstPageWidth && zoomPct>fitZoomPct;
-  const shouldEnable=zoomAllowsPan && !drawMode && !highlightMode && !linkDrawMode;
+  const shouldEnable=zoomAllowsPan && !drawMode && !annotationTool && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
   if(!zoomAllowsPan){
@@ -327,7 +408,7 @@ function attachPanHandlers(){
   };
 
   $viewport.addEventListener('pointerdown',e=>{
-    if(!panEnabled || drawMode || highlightMode || linkDrawMode) return;
+    if(!panEnabled || drawMode || annotationTool || linkDrawMode) return;
     if(e.pointerType==='mouse' && e.button!==0) return;
     if(e.target.closest('.link-hotspot')) return;
     pointerId=e.pointerId;
@@ -543,8 +624,8 @@ function updateLinksInteractivity(){
   for(const p of pages){
     if(!p.linksLayer) continue;
     p.linksLayer.classList.toggle('links-hidden', !linksVisible);
-    p.linksLayer.classList.toggle('links-blocked', drawMode || highlightMode || linkDrawMode);
-    p.canDr.style.pointerEvents = (drawMode || highlightMode || linkDrawMode) ? 'auto' : 'none';
+    p.linksLayer.classList.toggle('links-blocked', drawMode || !!annotationTool || linkDrawMode);
+    p.canDr.style.pointerEvents = (drawMode || annotationTool || linkDrawMode) ? 'auto' : 'none';
   }
   updatePanState();
 }
@@ -581,7 +662,7 @@ function toggleLinks(on){
   linksVisible=!!on;
   if(linksVisible){
     toggleDrawMode(false);
-    toggleHighlightMode(false);
+    setAnnotationTool(null);
     linkDrawMode=false;
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
@@ -592,7 +673,7 @@ function toggleLinks(on){
 function toggleDrawMode(on){
   drawMode = on;
   if(drawMode){
-    toggleHighlightMode(false);
+    setAnnotationTool(null);
     linksVisible=false;
     linkDrawMode=false;
     $linksToggle.textContent='Activer les liens';
@@ -603,9 +684,18 @@ function toggleDrawMode(on){
   updateLinksInteractivity();
 }
 
-function toggleHighlightMode(on){
-  highlightMode=!!on;
-  if(highlightMode){
+const TOOL_LABELS={highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
+const TOOL_HINTS={
+  highlight:'Maintiens le clic et glisse : le surlignage restera horizontal.',
+  freehand:'Maintiens le clic et dessine librement sur la page.',
+  rectangle:'Clique et glisse pour tracer un rectangle.',
+  ellipse:'Clique et glisse pour tracer un cercle ou une ellipse.',
+  line:'Clique et glisse pour tracer une ligne droite, dans n’importe quelle direction.',
+  text:'Clique et glisse pour choisir la zone du texte, puis écris dans la fenêtre.'
+};
+function setAnnotationTool(tool){
+  annotationTool=tool||null;
+  if(annotationTool){
     if(drawMode) toggleDrawMode(false);
     linksVisible=false;
     linkDrawMode=false;
@@ -613,9 +703,16 @@ function toggleHighlightMode(on){
     $linksToggle.classList.remove('btn-dark');
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
-  document.body.classList.toggle('highlight-enabled',highlightMode);
-  $toggleHighlight.textContent='Surligneur : ' + (highlightMode?'ON':'OFF');
-  $toggleHighlight.classList.toggle('btn-amber',highlightMode);
+  document.body.classList.toggle('annotation-enabled',!!annotationTool);
+  document.body.classList.toggle('annotation-text',annotationTool==='text');
+  document.querySelectorAll('.annotationTool').forEach(button=>{
+    const selected=button.dataset.tool===annotationTool;
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  $stopAnnotation.disabled=!annotationTool;
+  $openAnnotations.classList.toggle('btn-amber',!!annotationTool);
+  $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
 }
 
@@ -670,20 +767,62 @@ function redrawOverlay(p){
       }
     }
   }
-  if(p.highlights?.length){
-    ctx.save();
+  for(const annotation of p.annotations||[]) drawAnnotation(ctx,annotation);
+}
+function wrappedTextLines(ctx,text,maxWidth){
+  const result=[];
+  for(const paragraph of String(text||'').split(/\r?\n/)){
+    const words=paragraph.trim().split(/\s+/).filter(Boolean);
+    if(!words.length){ result.push(''); continue; }
+    let line=words.shift();
+    for(const word of words){
+      const candidate=line+' '+word;
+      if(ctx.measureText(candidate).width<=maxWidth) line=candidate;
+      else { result.push(line); line=word; }
+    }
+    result.push(line);
+  }
+  return result;
+}
+function drawAnnotation(ctx,a){
+  if(!a) return;
+  ctx.save();
+  ctx.strokeStyle=a.color||'#ffe100';
+  ctx.fillStyle=a.color||'#ffe100';
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  if(a.kind==='highlight'){
     ctx.globalAlpha=HIGHLIGHT_OPACITY;
-    ctx.strokeStyle=HIGHLIGHT_COLOR;
-    ctx.lineCap='round';
-    for(const line of p.highlights){
-      ctx.lineWidth=line.width||HIGHLIGHT_WIDTH_PX;
-      ctx.beginPath();
-      ctx.moveTo(line.x1,line.y);
-      ctx.lineTo(line.x2,line.y);
+    ctx.lineWidth=a.width||HIGHLIGHT_WIDTH_PX;
+    ctx.beginPath(); ctx.moveTo(a.x1,a.y); ctx.lineTo(a.x2,a.y); ctx.stroke();
+  }else if(a.kind==='freehand'){
+    const points=a.points||[];
+    if(points.length){
+      ctx.lineWidth=a.width||DRAW_WIDTH_PX;
+      ctx.beginPath(); ctx.moveTo(points[0].x,points[0].y);
+      for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+      if(points.length===1) ctx.lineTo(points[0].x+.1,points[0].y+.1);
       ctx.stroke();
     }
-    ctx.restore();
+  }else if(a.kind==='line'){
+    ctx.lineWidth=a.width||DRAW_WIDTH_PX;
+    ctx.beginPath(); ctx.moveTo(a.x1,a.y1); ctx.lineTo(a.x2,a.y2); ctx.stroke();
+  }else if(a.kind==='rectangle'){
+    ctx.lineWidth=a.widthLine||DRAW_WIDTH_PX;
+    ctx.strokeRect(a.x,a.y,a.w,a.h);
+  }else if(a.kind==='ellipse'){
+    ctx.lineWidth=a.widthLine||DRAW_WIDTH_PX;
+    ctx.beginPath(); ctx.ellipse(a.x+a.w/2,a.y+a.h/2,Math.abs(a.w/2),Math.abs(a.h/2),0,0,Math.PI*2); ctx.stroke();
+  }else if(a.kind==='text'){
+    const size=a.fontSize||TEXT_FONT_PX;
+    const lineHeight=Math.round(size*1.22);
+    ctx.font=`${size}px Calibri, Carlito, "Segoe UI", sans-serif`;
+    ctx.textBaseline='top';
+    ctx.beginPath(); ctx.rect(a.x,a.y,a.w,a.h); ctx.clip();
+    const lines=wrappedTextLines(ctx,a.text,Math.max(10,a.w));
+    lines.forEach((line,i)=>ctx.fillText(line,a.x,a.y+i*lineHeight));
   }
+  ctx.restore();
 }
 function redrawDraft(p,d){
   const ctx=p.canDr.getContext('2d');
@@ -692,7 +831,7 @@ function redrawDraft(p,d){
   if(d.kind==='highlight'){
     ctx.save();
     ctx.globalAlpha=HIGHLIGHT_OPACITY;
-    ctx.strokeStyle=HIGHLIGHT_COLOR;
+    ctx.strokeStyle=d.color||annotationColor;
     ctx.lineWidth=HIGHLIGHT_WIDTH_PX;
     ctx.lineCap='round';
     ctx.beginPath();
@@ -702,9 +841,41 @@ function redrawDraft(p,d){
     ctx.restore();
     return;
   }
+  if(d.kind==='freehand'||d.kind==='line'||d.kind==='rectangle'||d.kind==='ellipse'){
+    drawAnnotation(ctx,d);
+    return;
+  }
+  if(d.kind==='text'){
+    ctx.save();
+    ctx.setLineDash([12,8]); ctx.strokeStyle=d.color||annotationColor; ctx.lineWidth=3;
+    ctx.strokeRect(d.x,d.y,d.w,d.h);
+    ctx.restore();
+    return;
+  }
   ctx.setLineDash([]); ctx.strokeStyle='#9CA3AF'; ctx.lineWidth=3;
   const x=d.w>=0?d.x:d.x+d.w, y=d.h>=0?d.y:d.y+d.h;
   ctx.strokeRect(x,y,Math.abs(d.w),Math.abs(d.h));
+}
+function normalizedBox(d){
+  return {x:d.w>=0?d.x:d.x+d.w,y:d.h>=0?d.y:d.y+d.h,w:Math.abs(d.w),h:Math.abs(d.h)};
+}
+function commitAnnotation(p,annotation){
+  p.annotations.push(annotation);
+  historyStack.push({type:'annotation',page:p,annotation});
+  $undo.disabled=false;
+  saveAnnotations();
+  redrawOverlay(p);
+}
+function openTextDialog(p,annotation){
+  pendingTextAnnotation={p,annotation};
+  $annotationTextInput.value='';
+  $textDialogBackdrop.classList.add('open');
+  setTimeout(()=>$annotationTextInput.focus(),0);
+}
+function closeTextDialog(keepDraft=false){
+  if(pendingTextAnnotation && !keepDraft) redrawDraft(pendingTextAnnotation.p,null);
+  pendingTextAnnotation=null;
+  $textDialogBackdrop.classList.remove('open');
 }
 function attachDrawHandlers(p){
   let draft=null;
@@ -719,41 +890,65 @@ function attachDrawHandlers(p){
     return {x:(e.clientX-r.left)*(p.w/r.width),y:(e.clientY-r.top)*(p.h/r.height)};
   };
   function down(e){
-    if(!drawMode&&!highlightMode&&!linkDrawMode) return;
+    if(!drawMode&&!annotationTool&&!linkDrawMode) return;
     e.preventDefault();
     const start=toLocal(e);
-    if(highlightMode) draft={kind:'highlight',x:start.x,y:start.y,x2:start.x};
+    if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
+    else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],color:annotationColor,width:DRAW_WIDTH_PX};
+    else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
+    else if(annotationTool) draft={kind:annotationTool,x:start.x,y:start.y,w:0,h:0,color:annotationColor,widthLine:DRAW_WIDTH_PX};
     else { draft=start; draft.w=0; draft.h=0; }
     redrawDraft(p,draft);
   }
   function move(e){
-    if((!drawMode&&!highlightMode&&!linkDrawMode)||!draft) return;
+    if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     const m=toLocal(e);
     if(draft.kind==='highlight') draft.x2=clamp(m.x,0,p.w);
+    else if(draft.kind==='freehand'){
+      const last=draft.points[draft.points.length-1];
+      if(!last||Math.hypot(m.x-last.x,m.y-last.y)>2) draft.points.push({x:clamp(m.x,0,p.w),y:clamp(m.y,0,p.h)});
+    }
+    else if(draft.kind==='line'){ draft.x2=clamp(m.x,0,p.w); draft.y2=clamp(m.y,0,p.h); }
     else { draft.w=m.x-draft.x; draft.h=m.y-draft.y; }
     redrawDraft(p,draft);
   }
   function up(){
-    if((!drawMode&&!highlightMode&&!linkDrawMode)||!draft) return;
+    if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
     if(draft.kind==='highlight'){
       const line={
+        kind:'highlight',
         x1:clamp(draft.x,0,p.w),
         x2:clamp(draft.x2,0,p.w),
         y:clamp(draft.y,0,p.h),
-        width:HIGHLIGHT_WIDTH_PX
+        width:HIGHLIGHT_WIDTH_PX,
+        color:draft.color
       };
       draft=null;
-      if(Math.abs(line.x2-line.x1)>6){
-        p.highlights.push(line);
-        historyStack.push({type:'highlight',page:p,line});
-        $undo.disabled=false;
-        saveHighlights();
-        redrawOverlay(p);
-      }
+      if(Math.abs(line.x2-line.x1)>6) commitAnnotation(p,line);
       redrawDraft(p,null);
       return;
     }
-    const r={ x: draft.w>=0?draft.x:draft.x+draft.w, y: draft.h>=0?draft.y:draft.y+draft.h, w: Math.abs(draft.w), h: Math.abs(draft.h) };
+    if(draft.kind==='freehand'){
+      const annotation=draft; draft=null;
+      if(annotation.points.length>1) commitAnnotation(p,annotation);
+      redrawDraft(p,null); return;
+    }
+    if(draft.kind==='line'){
+      const annotation=draft; draft=null;
+      if(Math.hypot(annotation.x2-annotation.x1,annotation.y2-annotation.y1)>6) commitAnnotation(p,annotation);
+      redrawDraft(p,null); return;
+    }
+    const r=normalizedBox(draft);
+    if(draft.kind==='rectangle'||draft.kind==='ellipse'||draft.kind==='text'){
+      const kind=draft.kind, color=draft.color, widthLine=draft.widthLine;
+      draft=null;
+      if(r.w>10&&r.h>10){
+        const annotation={kind,color,x:r.x,y:r.y,w:r.w,h:r.h,widthLine};
+        if(kind==='text'){ redrawDraft(p,annotation); openTextDialog(p,annotation); return; }
+        commitAnnotation(p,annotation);
+      }
+      redrawDraft(p,null); return;
+    }
     draft=null;
     if(r.w>6 && r.h>6){
       if(linkDrawMode) addEncodedLink(p,r);
@@ -789,8 +984,8 @@ function makePage(n){
   const linksLayer=document.createElement('div'); linksLayer.className='linksLayer'; box.appendChild(linksLayer);
   box.appendChild(canDr);
 
-  const savedLines=Array.isArray(storedHighlights[String(n)]) ? storedHighlights[String(n)] : [];
-  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],highlights:savedLines,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
+  const savedAnnotations=Array.isArray(storedAnnotations[String(n)]) ? storedAnnotations[String(n)] : [];
+  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],annotations:savedAnnotations,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
   pages.push(p);
 
   const corr=new Image(); corr.decoding='async'; corr.loading='eager'; corr.fetchPriority='high';
@@ -955,7 +1150,7 @@ window.addEventListener('load', async ()=>{
         const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
         const n=parseInt(target,10); if(!Number.isInteger(n)||n<0||n>lastBookPage){ $linkEditorInfo.textContent=`Entre un numéro de page entre 0 et ${lastBookPage}.`; return; }
       }
-      toggleDrawMode(false); toggleHighlightMode(false); toggleLinks(false); linkDrawMode=true;
+      toggleDrawMode(false); setAnnotationTool(null); toggleLinks(false); linkDrawMode=true;
       $linkDraw.textContent='Trace maintenant la zone sur la page';
       $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte à rendre cliquable.';
       updateLinksInteractivity();
@@ -987,6 +1182,11 @@ window.addEventListener('load', async ()=>{
     }
   });
   document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if($textDialogBackdrop.classList.contains('open')){ closeTextDialog(); return; }
+      if($annotationPopup.classList.contains('open')){ $annotationPopup.classList.remove('open'); return; }
+    }
+    if(e.target.matches('input,textarea,select')) return;
     if(e.key==='ArrowLeft') goto(-1);
     if(e.key==='ArrowRight') goto(+1);
     if(e.key==='+'||e.key==='='){ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); }
@@ -996,13 +1196,46 @@ window.addEventListener('load', async ()=>{
   window.addEventListener('scroll',scheduleNavFromScroll,{passive:true});
 
   document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
-  document.getElementById('clear').addEventListener('click',()=>{ for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); } historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler'; });
-  $toggleHighlight.addEventListener('click',()=>toggleHighlightMode(!highlightMode));
-  $clearHighlights.addEventListener('click',()=>{
-    for(const p of pages){ p.highlights=[]; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='highlight') historyStack.splice(i,1);
+  document.getElementById('clear').addEventListener('click',()=>{
+    for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
+    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='correction') historyStack.splice(i,1);
     $undo.disabled=historyStack.length===0;
-    saveHighlights();
+    $revealAll.textContent='Tout révéler';
+  });
+
+  $openAnnotations.addEventListener('click',()=>{
+    $annotationPopup.classList.toggle('open');
+  });
+  $closeAnnotations.addEventListener('click',()=>{$annotationPopup.classList.remove('open');});
+  document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
+    annotationColor=button.dataset.color;
+    document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
+  }));
+  document.querySelectorAll('.annotationTool').forEach(button=>button.addEventListener('click',()=>{
+    setAnnotationTool(button.dataset.tool);
+    $annotationPopup.classList.remove('open');
+  }));
+  $stopAnnotation.addEventListener('click',()=>setAnnotationTool(null));
+  $clearAnnotations.addEventListener('click',()=>{
+    if(!confirm('Effacer toutes les annotations enregistrées dans cette liseuse ?')) return;
+    for(const p of pages){ p.annotations=[]; redrawOverlay(p); redrawDraft(p,null); }
+    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='annotation') historyStack.splice(i,1);
+    $undo.disabled=historyStack.length===0;
+    saveAnnotations();
+  });
+  $cancelAnnotationText.addEventListener('click',()=>closeTextDialog());
+  $saveAnnotationText.addEventListener('click',()=>{
+    if(!pendingTextAnnotation) return;
+    const text=$annotationTextInput.value.trim();
+    const {p,annotation}=pendingTextAnnotation;
+    if(!text){ $annotationTextInput.focus(); return; }
+    annotation.text=text;
+    annotation.fontSize=TEXT_FONT_PX;
+    commitAnnotation(p,annotation);
+    closeTextDialog();
+  });
+  $annotationTextInput.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); $saveAnnotationText.click(); }
   });
 
   $undo.addEventListener('click', doUndo);
@@ -1011,10 +1244,10 @@ window.addEventListener('load', async ()=>{
     const allShown=!!pages[0]?.showAll;
     if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
     const last=historyStack.pop(); if(!last){ $undo.disabled=true; return; }
-    if(last.type==='highlight'){
-      const i=last.page.highlights.lastIndexOf(last.line);
-      if(i!==-1) last.page.highlights.splice(i,1);
-      saveHighlights();
+    if(last.type==='annotation'){
+      const i=last.page.annotations.lastIndexOf(last.annotation);
+      if(i!==-1) last.page.annotations.splice(i,1);
+      saveAnnotations();
       redrawOverlay(last.page);
     }else{
       const i=last.page.zones.lastIndexOf(last.rect);
