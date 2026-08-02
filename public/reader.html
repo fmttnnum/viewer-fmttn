@@ -742,10 +742,7 @@ window.addEventListener('load', async ()=>{
   document.getElementById('resetZoom').addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
-  $tocButton.addEventListener('click',()=>{
-    toggleLinks(true);
-    gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE));
-  });
+  $tocButton.addEventListener('click',()=>gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE)));
   $pageJump.addEventListener('change',goToEnteredPage);
   $pageJump.addEventListener('keydown',e=>{
     if(e.key==='Enter'){
