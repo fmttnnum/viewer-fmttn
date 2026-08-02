@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Version : bouton Table des matières, sans doubles flèches de pagination -->
+<!-- Version : pagination adaptée et rotation globale en mode paysage -->
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
@@ -21,6 +21,8 @@
 
   .page{ position:relative; display:block; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.08);
          border-radius:8px; width:fit-content; }
+  .page.page-landscape{overflow:hidden}
+  .page.page-landscape .box{position:absolute;left:0;top:0;transform-origin:top left}
   .page.missing{ outline:3px solid var(--warn); }
   .spacer{background:transparent; box-shadow:none; border:1px dashed #e5e7eb}
   .box{position:relative; display:inline-block; will-change:width,height}
@@ -95,6 +97,7 @@
     <div class="row">
       <button class="btn" id="mode1up">1 page</button>
       <button class="btn" id="mode2up">2 pages</button>
+      <button class="btn" id="landscapeMode" title="Faire pivoter toutes les pages de 90° vers la droite">Mode paysage</button>
     </div>
     <label class="row" style="gap:6px">
       <input type="checkbox" id="bookMode" /> Pair à gauche / impair à droite
@@ -168,7 +171,7 @@ const FRONT_MATTER_PAGES = 2;
 const TABLE_OF_CONTENTS_PAGE = 6;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
+let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, linksVisible=false, linkDrawMode=false;
 let corrReadyCount = 0, revealReady = false;
 const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
 
@@ -177,6 +180,7 @@ const $pageJump=document.getElementById('pageJump');
 const $zoomVal=document.getElementById('zoomVal');
 const $tocButton=document.getElementById('tocButton');
 const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById('mode2up');
+const $landscape=document.getElementById('landscapeMode');
 const $book=document.getElementById('bookMode');
 const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoomOut');
 const $fitW=document.getElementById('fitWidth'), $z100=document.getElementById('resetZoom');
@@ -216,13 +220,25 @@ const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
 function applyZoom(){
   const s=cssScaleFromPct();
   for(const p of pages){
-    p.box.style.width=Math.round(p.w*s)+'px';
-    p.box.style.height=Math.round(p.h*s)+'px';
+    const cssW=Math.round(p.w*s), cssH=Math.round(p.h*s);
+    p.box.style.width=cssW+'px';
+    p.box.style.height=cssH+'px';
+    p.elPage.classList.toggle('page-landscape',landscapeMode);
+    if(landscapeMode){
+      p.elPage.style.width=cssH+'px';
+      p.elPage.style.height=cssW+'px';
+      p.box.style.transform=`translateX(${cssH}px) rotate(90deg)`;
+    }else{
+      p.elPage.style.removeProperty('width');
+      p.elPage.style.removeProperty('height');
+      p.box.style.removeProperty('transform');
+    }
     updateLinkLayerScale(p);
   }
   if(pages[0]){
-    spacerBox.style.width=Math.round(pages[0].w*s)+'px';
-    spacerBox.style.height=Math.round(pages[0].h*s)+'px';
+    const spacerW=Math.round(pages[0].w*s), spacerH=Math.round(pages[0].h*s);
+    spacerBox.style.width=(landscapeMode?spacerH:spacerW)+'px';
+    spacerBox.style.height=(landscapeMode?spacerW:spacerH)+'px';
   }
   $zoomVal.textContent=`${zoomPct}%`;
   if($slider) $slider.value=String(zoomPct);
@@ -232,7 +248,8 @@ function fitWidth(){
   const vp=$viewport.getBoundingClientRect();
   const gutter=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gutter'))||18;
   const targetCssWidth=(layout==='1up')?(vp.width-2):((vp.width-gutter)/2);
-  const desiredCssScale=targetCssWidth/firstPageWidth;
+  const naturalDisplayWidth=landscapeMode?(pages[currentIndex]?.h||pages[0]?.h||firstPageWidth):firstPageWidth;
+  const desiredCssScale=targetCssWidth/naturalDisplayWidth;
   const desiredPct=desiredCssScale*100*(firstPageWidth/REF_WIDTH_PX);
   zoomPct=clamp(Math.round(desiredPct),MIN_PCT,MAX_PCT);
   applyZoom();
@@ -483,7 +500,16 @@ function redrawDraft(p,d){
 }
 function attachDrawHandlers(p){
   let draft=null;
-  const toLocal=e=>{ const r=p.canDr.getBoundingClientRect(); const sx=p.w/r.width, sy=p.h/r.height; return {x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy}; };
+  const toLocal=e=>{
+    const r=p.canDr.getBoundingClientRect();
+    if(landscapeMode){
+      return {
+        x:(e.clientY-r.top)*(p.w/r.height),
+        y:(r.right-e.clientX)*(p.h/r.width)
+      };
+    }
+    return {x:(e.clientX-r.left)*(p.w/r.width),y:(e.clientY-r.top)*(p.h/r.height)};
+  };
   function down(e){ if(!drawMode&&!linkDrawMode) return; e.preventDefault(); draft=toLocal(e); draft.w=0; draft.h=0; redrawDraft(p,draft); }
   function move(e){ if((!drawMode&&!linkDrawMode)||!draft) return; const m=toLocal(e); draft.w=m.x-draft.x; draft.h=m.y-draft.y; redrawDraft(p,draft); }
   function up(){
@@ -567,6 +593,24 @@ function updateLayoutButtons(){
   $mode2.classList.toggle('btn-view-active',!onePageActive);
   $mode1.setAttribute('aria-pressed',String(onePageActive));
   $mode2.setAttribute('aria-pressed',String(!onePageActive));
+  $landscape.classList.toggle('btn-view-active',landscapeMode);
+  $landscape.setAttribute('aria-pressed',String(landscapeMode));
+}
+
+function toggleLandscapeMode(){
+  const preservedIndex=clamp(currentIndex,0,Math.max(0,pages.length-1));
+  landscapeMode=!landscapeMode;
+  updateLayoutButtons();
+  applyZoom();
+  currentIndex=preservedIndex;
+  requestAnimationFrame(()=>{
+    const card=cardsReal()[preservedIndex];
+    if(!card) return;
+    const target=layout==='2up'?(card.closest('.spread')||card):card;
+    target.scrollIntoView({behavior:'auto',block:'start'});
+    currentIndex=preservedIndex;
+    syncPageUI();
+  });
 }
 
 function rebuild(){
@@ -659,6 +703,7 @@ window.addEventListener('load', async ()=>{
 
   $mode1.addEventListener('click',()=>{layout='1up'; rebuild();});
   $mode2.addEventListener('click',()=>{layout='2up'; rebuild();});
+  $landscape.addEventListener('click',toggleLandscapeMode);
   $book.addEventListener('change',e=>{bookMode=e.target.checked; if(layout==='2up') rebuild();});
 
   document.getElementById('zoomIn').addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
@@ -704,4 +749,5 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
+
 
