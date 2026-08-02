@@ -6,7 +6,12 @@
 <title>FMttn — Liseuse PNG + Corrections</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root{ --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444; }
+  :root{
+    --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444;
+    /* Mains vectorielles fines : elles restent nettes, même sur un écran Retina/HiDPI. */
+    --cursor-hand-open:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M11 15V8a2 2 0 0 1 4 0v5V6a2 2 0 0 1 4 0v7V8a2 2 0 0 1 4 0v7-4a2 2 0 0 1 4 0v7c0 5.5-4.5 10-10 10h-1c-3.7 0-6.4-1.6-8.3-4.7l-1.8-3a2 2 0 0 1 3.2-2.4L11 21z' fill='white' stroke='%23111827' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 14 16, grab;
+    --cursor-hand-closed:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M9 14v5.5l-2-1.8a2 2 0 0 0-3 2.6l3.1 4.2A9 9 0 0 0 14.3 28H17c5 0 9-4 9-9v-5a2 2 0 0 0-4 0v-1a2 2 0 0 0-4 0v-1a2 2 0 0 0-4 0v2a2.5 2.5 0 0 0-5 0z' fill='white' stroke='%23111827' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 14v4m4-5v5m4-4v4' fill='none' stroke='%23111827' stroke-width='1.15' stroke-linecap='round'/%3E%3C/svg%3E") 14 17, grabbing;
+  }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{ margin:0; font:14px/1.45 system-ui,Arial; background:var(--bg); color:var(--ink);
@@ -17,7 +22,7 @@
   body.pan-enabled .box,
   body.pan-enabled .page img,
   body.pan-enabled .ov,
-  body.pan-enabled .linksLayer{cursor:grab}
+  body.pan-enabled .linksLayer{cursor:var(--cursor-hand-open)}
   body.pan-enabled .link-hotspot{cursor:pointer}
   body.pan-enabled #viewport{touch-action:none;will-change:transform}
   body.is-panning,
@@ -26,11 +31,12 @@
   body.is-panning .box,
   body.is-panning .page img,
   body.is-panning .ov,
-  body.is-panning .linksLayer{cursor:grabbing!important;user-select:none}
+  body.is-panning .linksLayer{cursor:var(--cursor-hand-closed)!important;user-select:none}
   body.annotation-enabled .dr{cursor:crosshair;touch-action:none}
   body.annotation-text .dr{cursor:text}
   body.annotation-select .dr{cursor:default}
-  body.annotation-select.annotation-dragging .dr{cursor:move}
+  body.annotation-select .dr.annotation-hover-movable{cursor:var(--cursor-hand-open)}
+  body.annotation-select.annotation-dragging .dr{cursor:var(--cursor-hand-closed)!important}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
   #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center; }
@@ -96,8 +102,8 @@
   /* fenêtre des annotations */
   .annotationPopup{position:fixed;right:294px;top:116px;width:310px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#fff;border:1px solid #d1d5db;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:14px;z-index:40;display:none;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
   .annotationPopup.open{display:block}
-  .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px -6px 12px;padding:6px;cursor:grab;user-select:none;touch-action:none}
-  .annotationPopup.dragging .annotationPopupHeader{cursor:grabbing}
+  .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px -6px 12px;padding:6px;cursor:var(--cursor-hand-open);user-select:none;touch-action:none}
+  .annotationPopup.dragging .annotationPopupHeader{cursor:var(--cursor-hand-closed)}
   .annotationPopupTitle{font-size:17px;font-weight:700}
   .annotationClose{width:32px;height:32px;padding:0;font-size:20px;line-height:1;cursor:pointer;touch-action:manipulation}
   .annotationLabel{font-weight:700;margin:9px 0 6px}
@@ -722,6 +728,7 @@ const TOOL_HINTS={
 function setAnnotationTool(tool){
   if(tool!=='select') clearSelectedAnnotation();
   annotationTool=tool||null;
+  if(annotationTool!=='select') document.querySelectorAll('.dr.annotation-hover-movable').forEach(canvas=>canvas.classList.remove('annotation-hover-movable'));
   if(annotationTool){
     if(drawMode) toggleDrawMode(false);
     linksVisible=false;
@@ -1445,6 +1452,16 @@ function attachDrawHandlers(p){
     redrawDraft(p,null);
   }
   p.canDr.addEventListener('mousedown',down);
+  p.canDr.addEventListener('mousemove',e=>{
+    if(annotationTool!=='select'||selectionGesture||pendingTextAnnotation){
+      p.canDr.classList.remove('annotation-hover-movable');
+      return;
+    }
+    p.canDr.classList.toggle('annotation-hover-movable',!!findAnnotationAt(p,toLocal(e)));
+  });
+  p.canDr.addEventListener('mouseleave',()=>{
+    if(!selectionGesture) p.canDr.classList.remove('annotation-hover-movable');
+  });
   p.canDr.addEventListener('keydown',e=>{
     const deleteKey=e.key==='Delete'||e.key==='Backspace'||e.key==='Del'||e.code==='Delete'||e.keyCode===46;
     if(!deleteKey||!selectedAnnotation||pendingTextAnnotation) return;
