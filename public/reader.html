@@ -59,7 +59,9 @@
   .btn-view-active{background:#e5e7eb;border-color:#d1d5db;font-weight:400}
   .btn:active::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.08);}
   .pill{padding:6px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;min-width:44px;text-align:center}
-  .jump{width:74px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px}
+  .pageJumpGroup{display:flex;align-items:center;gap:5px}
+  .jump{width:58px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;text-align:center}
+  .jumpSeparator[hidden],.jump[hidden]{display:none}
   .toggler{ position:fixed; right:12px; top:12px; background:#111; color:#fff; border:none; border-radius:10px; padding:8px 10px; cursor:pointer; z-index:21 }
   #zoomSlider{ appearance:none; height:6px; border-radius:999px; background:#e5e7eb; width:160px; margin-left:8px; }
   #zoomSlider::-webkit-slider-thumb{ appearance:none; width:16px; height:16px; border-radius:999px; background:#111; cursor:pointer; }
@@ -83,7 +85,11 @@
     <div class="row"><strong>Pages</strong></div>
     <div class="row">
       <button class="btn" id="tocButton">Table des matières</button>
-      <input id="pageJump" class="jump" type="text" inputmode="numeric" placeholder="n°" aria-label="Numéro de page" />
+      <span class="pageJumpGroup">
+        <input id="pageJump" class="jump" type="text" inputmode="numeric" placeholder="n°" aria-label="Numéro de la page affichée" />
+        <span id="pageJumpSeparator" class="jumpSeparator" hidden>–</span>
+        <input id="pageJumpRight" class="jump" type="text" inputmode="numeric" placeholder="n°" aria-label="Numéro de la page de droite" hidden />
+      </span>
     </div>
   </div>
 
@@ -174,6 +180,8 @@ const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1
 
 const $viewport=document.getElementById('viewport');
 const $pageJump=document.getElementById('pageJump');
+const $pageJumpRight=document.getElementById('pageJumpRight');
+const $pageJumpSeparator=document.getElementById('pageJumpSeparator');
 const $zoomVal=document.getElementById('zoomVal');
 const $tocButton=document.getElementById('tocButton');
 const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById('mode2up');
@@ -256,7 +264,18 @@ function displayedPageNumbers(){
     .filter(number=>number!=='');
 }
 function syncPageUI(){
-  $pageJump.value=displayedPageNumbers().join(' – ');
+  const numbers=displayedPageNumbers();
+  const showTwoNumbers=layout==='2up' && numbers.length>1;
+  $pageJump.value=numbers[0]||'';
+  $pageJumpRight.value=showTwoNumbers ? numbers[1] : '';
+  $pageJumpRight.hidden=!showTwoNumbers;
+  $pageJumpSeparator.hidden=!showTwoNumbers;
+}
+function goToEnteredPage(input){
+  const n=parseInt(input.value.trim(),10);
+  const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
+  if(Number.isInteger(n) && n>=0 && n<=lastBookPage) gotoIndex(bookPageToIndex(n));
+  else syncPageUI();
 }
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
@@ -647,11 +666,15 @@ window.addEventListener('load', async ()=>{
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
   $tocButton.addEventListener('click',()=>gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE)));
-  document.getElementById('pageJump').addEventListener('change',()=>{
-    const n=parseInt($pageJump.value,10);
-    const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
-    if(Number.isInteger(n) && n>=0 && n<=lastBookPage) gotoIndex(bookPageToIndex(n));
-    else syncPageUI();
+  [$pageJump,$pageJumpRight].forEach(input=>{
+    input.addEventListener('change',()=>goToEnteredPage(input));
+    input.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        goToEnteredPage(input);
+        input.select();
+      }
+    });
   });
   document.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft') goto(-1);
@@ -681,4 +704,3 @@ window.addEventListener('load', async ()=>{
 </script>
 </body>
 </html>
-
