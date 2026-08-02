@@ -322,6 +322,7 @@ let pendingTextAnnotation=null;
 let selectedAnnotation=null;
 let annotationFontEditBefore=null;
 let activeAnnotationConstraintRefresh=null;
+let annotationClipboard=null;
 
 function updateHistoryButtons(){
   $undo.disabled=correctionHistoryStack.length===0;
@@ -717,7 +718,7 @@ function toggleDrawMode(on){
 
 const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
 const TOOL_HINTS={
-  select:'Clique sur un élément ou trace un cadre autour de plusieurs éléments. Déplace la sélection ou appuie sur Suppr pour l’effacer.',
+  select:'Clique sur un élément ou trace un cadre autour de plusieurs éléments. Déplace, supprime ou copie-colle la sélection avec Ctrl+C et Ctrl+V.',
   highlight:'Maintiens le clic et glisse. Garde Maj enfoncée pour un surlignage parfaitement horizontal.',
   freehand:'Maintiens le clic et dessine librement sur la page.',
   rectangle:'Clique et glisse pour tracer un rectangle. Garde Maj enfoncée pour créer un carré.',
@@ -1071,6 +1072,38 @@ function deleteSelectedAnnotation(){
   saveAnnotations();
   redrawOverlay(p);
   redrawDraft(p,null);
+  return true;
+}
+function copySelectedAnnotations(){
+  if(annotationTool!=='select'||!selectedAnnotation||pendingTextAnnotation) return false;
+  const annotations=selectedAnnotationList();
+  if(!annotations.length) return false;
+  annotationClipboard={
+    page:selectedAnnotation.p,
+    snapshots:annotations.map(cloneAnnotation),
+    pasteCount:0
+  };
+  return true;
+}
+function pasteCopiedAnnotations(){
+  if(annotationTool!=='select'||!annotationClipboard||pendingTextAnnotation) return false;
+  const p=selectedAnnotation?.p||annotationClipboard.page;
+  if(!p||!pages.includes(p)||!annotationClipboard.snapshots.length) return false;
+  annotationClipboard.pasteCount+=1;
+  const snapshots=annotationClipboard.snapshots.map(cloneAnnotation);
+  const annotations=snapshots.map(cloneAnnotation);
+  const offset=localUiSize(p,18)*annotationClipboard.pasteCount;
+  moveAnnotationsFromSnapshots(p,annotations,snapshots,offset,offset);
+  const items=annotations.map(annotation=>{
+    const index=p.annotations.length;
+    p.annotations.push(annotation);
+    return {annotation,index};
+  });
+  recordAnnotationHistory({type:'annotation-paste-multiple',page:p,items});
+  saveAnnotations();
+  redrawOverlay(p);
+  selectAnnotations(p,annotations);
+  p.canDr.focus({preventScroll:true});
   return true;
 }
 function clearAllAnnotations(){
@@ -1711,6 +1744,14 @@ window.addEventListener('load', async ()=>{
       if($annotationPopup.classList.contains('open')){ closeAnnotationPopup(); return; }
     }
     if(e.target.matches('input,textarea,select')) return;
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'){
+      if(copySelectedAnnotations()) e.preventDefault();
+      return;
+    }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){
+      if(pasteCopiedAnnotations()) e.preventDefault();
+      return;
+    }
     if((e.key==='Delete'||e.key==='Backspace'||e.key==='Del'||e.code==='Delete'||e.keyCode===46)&&selectedAnnotation){
       e.preventDefault();
       deleteSelectedAnnotation();
@@ -1837,6 +1878,16 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       if(annotationTool==='select') selectAnnotations(last.page,last.items.map(item=>item.annotation));
+    }else if(last.type==='annotation-paste-multiple'){
+      const annotations=last.items.map(item=>item.annotation);
+      for(const annotation of annotations){
+        const i=last.page.annotations.indexOf(annotation);
+        if(i!==-1) last.page.annotations.splice(i,1);
+      }
+      if(selectedAnnotationList().some(annotation=>annotations.includes(annotation))) clearSelectedAnnotation(false);
+      saveAnnotations();
+      redrawOverlay(last.page);
+      redrawDraft(last.page,null);
     }else if(last.type==='annotation-clear-all'){
       for(const entry of last.pages){
         for(const item of entry.items){
@@ -1888,6 +1939,15 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(next.page);
       redrawDraft(next.page,null);
+    }else if(next.type==='annotation-paste-multiple'){
+      for(const item of next.items){
+        if(next.page.annotations.includes(item.annotation)) continue;
+        const index=clamp(item.index,0,next.page.annotations.length);
+        next.page.annotations.splice(index,0,item.annotation);
+      }
+      saveAnnotations();
+      redrawOverlay(next.page);
+      if(annotationTool==='select') selectAnnotations(next.page,next.items.map(item=>item.annotation));
     }else if(next.type==='annotation-clear-all'){
       clearSelectedAnnotation(false);
       for(const entry of next.pages){
