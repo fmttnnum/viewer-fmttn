@@ -1,9 +1,9 @@
 <!doctype html>
-<!-- Version : pagination adaptée et rotation globale en mode paysage -->
+<!-- Version : pagination adaptÃ©e et rotation globale en mode paysage -->
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
-<title>FMttn — Liseuse PNG + Corrections</title>
+<title>FMttn â€” Liseuse PNG + Corrections</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root{ --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444; }
@@ -32,7 +32,7 @@
   .ov{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1}
   .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3}
 
-  /* couche des liens : coordonnées en px natifs + scale CSS */
+  /* couche des liens : coordonnÃ©es en px natifs + scale CSS */
   .linksLayer{ position:absolute; left:0; top:0; width:0; height:0; z-index:2; pointer-events:auto; transform-origin:top left; }
   .linksLayer.links-blocked{ pointer-events:none; }
   .link-hotspot{ position:absolute; display:block; outline:none; border:0; background:transparent; }
@@ -72,12 +72,12 @@
   .badge{ position:absolute; top:8px; right:8px; background:#111; color:#fff; font:500 12px/1 system-ui,Arial; padding:4px 8px; border-radius:999px; pointer-events:none; }
   .badge.warn{ background:var(--warn) }
 
-  /* on masque la légende numérotée */
+  /* on masque la lÃ©gende numÃ©rotÃ©e */
   .num{display:none!important}
 </style>
 </head>
 <body>
-<button id="toggleSide" class="toggler" title="Afficher/masquer le menu">☰</button>
+<button id="toggleSide" class="toggler" title="Afficher/masquer le menu">â˜°</button>
 
 <aside id="side" class="side" aria-label="Outils de lecture">
   <div class="header"><div class="title">Outils</div></div>
@@ -85,9 +85,9 @@
   <div class="section">
     <div class="row"><strong>Pages</strong></div>
     <div class="row">
-      <button class="btn" id="tocButton">Table des matières</button>
+      <button class="btn" id="tocButton">Table des matiÃ¨res</button>
       <span class="pageJumpGroup">
-        <input id="pageJump" class="jump" type="text" inputmode="numeric" placeholder="n°" aria-label="Numéro de la page affichée" />
+        <input id="pageJump" class="jump" type="text" inputmode="numeric" placeholder="nÂ°" aria-label="NumÃ©ro de la page affichÃ©e" />
       </span>
     </div>
   </div>
@@ -97,23 +97,23 @@
     <div class="row">
       <button class="btn" id="mode1up">1 page</button>
       <button class="btn" id="mode2up">2 pages</button>
-      <button class="btn" id="landscapeMode" title="Faire pivoter toutes les pages de 90° vers la droite">Mode paysage</button>
+      <button class="btn" id="landscapeMode" title="Faire pivoter toutes les pages de 90Â° vers la droite">Mode paysage</button>
     </div>
     <label class="row" style="gap:6px">
-      <input type="checkbox" id="bookMode" /> Pair à gauche / impair à droite
+      <input type="checkbox" id="bookMode" /> Pair Ã  gauche / impair Ã  droite
     </label>
   </div>
 
   <div class="section">
     <div class="row"><strong>Zoom</strong></div>
     <div class="row">
-      <button class="btn" id="zoomOut">–</button>
+      <button class="btn" id="zoomOut">â€“</button>
       <span class="pill" id="zoomVal">100%</span>
       <button class="btn" id="zoomIn">+</button>
       <input id="zoomSlider" type="range" min="30" max="200" value="100" step="1" />
     </div>
     <div class="row">
-      <button class="btn btn-amber" id="fitWidth">Adapter à la largeur</button>
+      <button class="btn btn-amber" id="fitWidth">Adapter Ã  la largeur</button>
       <button class="btn" id="resetZoom">100%</button>
     </div>
   </div>
@@ -122,10 +122,10 @@
     <div class="row"><strong>Corrections</strong></div>
     <div class="row">
       <button id="toggleRect" class="btn btn-dark">Locales : OFF</button>
-      <button id="undo" class="btn" title="Revenir en arrière (Ctrl+Z)">↶</button>
+      <button id="undo" class="btn" title="Revenir en arriÃ¨re (Ctrl+Z)">â†¶</button>
       <button id="clear" class="btn">Effacer</button>
     </div>
-    <button id="revealAll" class="btn btn-amber" disabled>Préchargement… 0%</button>
+    <button id="revealAll" class="btn btn-amber" disabled>PrÃ©chargementâ€¦ 0%</button>
   </div>
 
   <div class="section">
@@ -139,11 +139,11 @@
         <option value="external">Lien Internet</option>
         <option value="internal">Page de la liseuse</option>
       </select>
-      <input id="linkTarget" class="linkField" type="text" placeholder="https://…" />
+      <input id="linkTarget" class="linkField" type="text" placeholder="https://â€¦" />
       <input id="linkTitle" class="linkField" type="text" placeholder="Titre facultatif" />
       <button id="linkDraw" class="btn btn-dark">Tracer la zone du lien</button>
-      <button id="linkDeleteSelected" class="btn" disabled>Supprimer le lien sélectionné</button>
-      <button id="linkExport" class="btn btn-amber">Télécharger links.json</button>
+      <button id="linkDeleteSelected" class="btn" disabled>Supprimer le lien sÃ©lectionnÃ©</button>
+      <button id="linkExport" class="btn btn-amber">TÃ©lÃ©charger links.json</button>
       <div id="linkEditorInfo" class="editorHint">Pour retirer un ancien lien : active les liens, puis clique sur sa zone.</div>
     </div>
   </div>
@@ -213,7 +213,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const cssScaleFromPct=()=>!firstPageWidth?1:(zoomPct/100)*(REF_WIDTH_PX/firstPageWidth);
 const displayNumberFromIndex=index=>index===0?'0':index===1?'':String(index-1);
 const displayNumberFromPhysical=n=>displayNumberFromIndex(n-1);
-const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxième de couverture':`page ${n-FRONT_MATTER_PAGES}`;
+const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxiÃ¨me de couverture':`page ${n-FRONT_MATTER_PAGES}`;
 const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
 
 /*** ZOOM ***/
@@ -275,7 +275,7 @@ function syncPageUI(){
   const numbers=displayedPageNumbers();
   $pageJump.dataset.displayedNumbers=JSON.stringify(numbers);
   $pageJump.value=layout==='2up' && numbers.length>1
-    ? `${numbers[0]} – ${numbers[1]}`
+    ? `${numbers[0]} â€“ ${numbers[1]}`
     : (numbers[0]||'');
 }
 function goToEnteredPage(){
@@ -303,9 +303,9 @@ function gotoIndex(target){
   syncPageUI();
   cards[target].scrollIntoView({behavior:'auto',block:'start'});
 
-  // Si l'image visée termine son chargement juste après le saut, on recale
-  // une fois la page. Cela évite qu'elle soit repoussée par les images qui
-  // prennent leur hauteur définitive au même moment.
+  // Si l'image visÃ©e termine son chargement juste aprÃ¨s le saut, on recale
+  // une fois la page. Cela Ã©vite qu'elle soit repoussÃ©e par les images qui
+  // prennent leur hauteur dÃ©finitive au mÃªme moment.
   const targetPage=pages[target];
   if(targetPage && !targetPage.imgDoc.complete){
     targetPage.imgDoc.addEventListener('load',()=>{
@@ -327,9 +327,9 @@ function updateNavFromScroll(){
   const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
   cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
 
-  // En double page, les deux pages ont exactement la même visibilité.
-  // Si la page active appartient toujours à la double page visible, on la
-  // conserve comme ancre au lieu de la remplacer systématiquement par celle
+  // En double page, les deux pages ont exactement la mÃªme visibilitÃ©.
+  // Si la page active appartient toujours Ã  la double page visible, on la
+  // conserve comme ancre au lieu de la remplacer systÃ©matiquement par celle
   // de gauche.
   if(layout==='2up' && cards[currentIndex] && cards[best.idx]){
     const currentSpread=cards[currentIndex].closest('.spread');
@@ -413,7 +413,7 @@ function selectEncodedLink(key,index){
   $linkDeleteSelected.disabled=false;
   const L=list[index];
   const destination=L.kind==='internal'?`la page ${L.gotoPage}`:(L.href||'ce lien');
-  $linkEditorInfo.textContent=`Lien sélectionné sur la ${pageLabelFromPhysical(+key)} vers ${destination}.`;
+  $linkEditorInfo.textContent=`Lien sÃ©lectionnÃ© sur la ${pageLabelFromPhysical(+key)} vers ${destination}.`;
 }
 function clearSelectedLink(){
   selectedLink=null;
@@ -421,7 +421,7 @@ function clearSelectedLink(){
 }
 function deleteSelectedLink(){
   if(!selectedLink){
-    $linkEditorInfo.textContent='Active les liens, puis clique sur la zone à supprimer.';
+    $linkEditorInfo.textContent='Active les liens, puis clique sur la zone Ã  supprimer.';
     return;
   }
   const {key,index}=selectedLink;
@@ -432,7 +432,7 @@ function deleteSelectedLink(){
   clearSelectedLink();
   const p=pages.find(x=>String(x.idx)===key); if(p) mountLinksForPage(p);
   toggleLinks(true);
-  $linkEditorInfo.textContent=`Lien supprimé de la ${pageLabelFromPhysical(+key)}. Tu peux maintenant en tracer un nouveau.`;
+  $linkEditorInfo.textContent=`Lien supprimÃ© de la ${pageLabelFromPhysical(+key)}. Tu peux maintenant en tracer un nouveau.`;
 }
 function toggleLinks(on){
   linksVisible=!!on;
@@ -441,7 +441,7 @@ function toggleLinks(on){
     linkDrawMode=false;
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
-  $linksToggle.textContent=linksVisible?'Désactiver les liens':'Activer les liens';
+  $linksToggle.textContent=linksVisible?'DÃ©sactiver les liens':'Activer les liens';
   $linksToggle.classList.toggle('btn-dark',linksVisible);
   updateLinksInteractivity();
 }
@@ -480,7 +480,7 @@ function addEncodedLink(p,r){
   toggleLinks(true);
   $linkTarget.focus();
   const total=Object.values(LINKS_MAP).reduce((sum,list)=>sum+(Array.isArray(list)?list.length:0),0);
-  $linkEditorInfo.textContent=`Lien ajouté sur la ${pageLabelFromPhysical(p.idx)}. ${total} lien(s) seront enregistrés dans le prochain fichier links.json.`;
+  $linkEditorInfo.textContent=`Lien ajoutÃ© sur la ${pageLabelFromPhysical(p.idx)}. ${total} lien(s) seront enregistrÃ©s dans le prochain fichier links.json.`;
 }
 
 function exportLinksFile(){
@@ -489,7 +489,7 @@ function exportLinksFile(){
   const url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
   const a=document.createElement('a'); a.href=url; a.download='links.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  $linkEditorInfo.textContent='Le nouveau fichier links.json a été téléchargé.';
+  $linkEditorInfo.textContent='Le nouveau fichier links.json a Ã©tÃ© tÃ©lÃ©chargÃ©.';
 }
 
 /*** CORRECTIONS ***/
@@ -544,11 +544,11 @@ function attachDrawHandlers(p){
   window.addEventListener('mouseup',up);
 }
 
-/*** PRÉCHARGEMENT : corrections ***/
+/*** PRÃ‰CHARGEMENT : corrections ***/
 function updateRevealButton(){
   const pct=Math.round((corrReadyCount/pages.length)*100);
-  if(corrReadyCount>=pages.length && pages.length>0){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout révéler'; }
-  else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${isFinite(pct)?pct:0}%`; }
+  if(corrReadyCount>=pages.length && pages.length>0){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout rÃ©vÃ©ler'; }
+  else { $revealAll.disabled=true; $revealAll.textContent=`PrÃ©chargementâ€¦ ${isFinite(pct)?pct:0}%`; }
 }
 
 /*** BUILD ***/
@@ -585,9 +585,9 @@ function makePage(n){
       firstPageWidth=p.w;
       firstPageHeight=p.h;
 
-      // Toutes les pages occupent immédiatement leur place dans le document,
-      // même si leurs PNG restent chargés progressivement par le navigateur.
-      // La navigation peut donc atteindre directement une page éloignée.
+      // Toutes les pages occupent immÃ©diatement leur place dans le document,
+      // mÃªme si leurs PNG restent chargÃ©s progressivement par le navigateur.
+      // La navigation peut donc atteindre directement une page Ã©loignÃ©e.
       for(const other of pages){
         if(!other.w || !other.h){
           other.w=firstPageWidth;
@@ -644,9 +644,9 @@ function toggleLandscapeMode(){
 }
 
 function rebuild(){
-  // La position verticale ne représente plus la même page après un passage
-  // de 1 à 2 pages (ou inversement). On mémorise donc la page active, puis on
-  // rejoint la page ou la double page qui la contient après reconstruction.
+  // La position verticale ne reprÃ©sente plus la mÃªme page aprÃ¨s un passage
+  // de 1 Ã  2 pages (ou inversement). On mÃ©morise donc la page active, puis on
+  // rejoint la page ou la double page qui la contient aprÃ¨s reconstruction.
   const preservedIndex=clamp(currentIndex,0,Math.max(0,pages.length-1));
   if(layout==='1up') mount1up(); else mount2up();
   updateLayoutButtons();
@@ -664,7 +664,7 @@ function rebuild(){
   });
 }
 
-/*** DÉCOUVERTE AUTO DES PAGES ***/
+/*** DÃ‰COUVERTE AUTO DES PAGES ***/
 function testImage(url){
   return new Promise(resolve=>{
     const img=new Image();
@@ -677,13 +677,13 @@ async function discoverPages(max=500){
   const list=[];
   for(let n=1;n<=max;n++){
     const ok = await testImage(docPath(n));
-    if(!ok) break;           // arrêt à la première manquante
+    if(!ok) break;           // arrÃªt Ã  la premiÃ¨re manquante
     list.push(n);
   }
   return list;
 }
 async function getPagesList(){
-  // manifest.json prioritaire s’il existe
+  // manifest.json prioritaire sâ€™il existe
   try{
     const res=await fetch('./manifest.json?v='+Date.now(),{cache:'no-store'});
     if(res.ok){
@@ -691,7 +691,7 @@ async function getPagesList(){
       if(m && Array.isArray(m.pages) && m.pages.length) return m.pages;
     }
   }catch(_){}
-  // sinon découverte auto
+  // sinon dÃ©couverte auto
   return await discoverPages(500);
 }
 
@@ -712,19 +712,19 @@ window.addEventListener('load', async ()=>{
 
   if(LINK_EDITOR){
     $linkEditor.classList.add('active');
-    $linkKind.addEventListener('change',()=>{ $linkTarget.placeholder=$linkKind.value==='external'?'https://…':'Numéro de page'; });
+    $linkKind.addEventListener('change',()=>{ $linkTarget.placeholder=$linkKind.value==='external'?'https://â€¦':'NumÃ©ro de page'; });
     $linkDraw.addEventListener('click',()=>{
       const target=$linkTarget.value.trim();
       if($linkKind.value==='external'){
         try{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol)) throw new Error(); }
-        catch(_){ $linkEditorInfo.textContent='Entre une adresse complète commençant par https://'; return; }
+        catch(_){ $linkEditorInfo.textContent='Entre une adresse complÃ¨te commenÃ§ant par https://'; return; }
       }else{
         const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
-        const n=parseInt(target,10); if(!Number.isInteger(n)||n<0||n>lastBookPage){ $linkEditorInfo.textContent=`Entre un numéro de page entre 0 et ${lastBookPage}.`; return; }
+        const n=parseInt(target,10); if(!Number.isInteger(n)||n<0||n>lastBookPage){ $linkEditorInfo.textContent=`Entre un numÃ©ro de page entre 0 et ${lastBookPage}.`; return; }
       }
       toggleDrawMode(false); toggleLinks(false); linkDrawMode=true;
       $linkDraw.textContent='Trace maintenant la zone sur la page';
-      $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte à rendre cliquable.';
+      $linkEditorInfo.textContent='Avec la souris, entoure le QR code ou le texte Ã  rendre cliquable.';
       updateLinksInteractivity();
     });
     $linkDeleteSelected.addEventListener('click',deleteSelectedLink);
@@ -742,7 +742,10 @@ window.addEventListener('load', async ()=>{
   document.getElementById('resetZoom').addEventListener('click',()=>{ zoomPct=100; applyZoom(); });
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
 
-  $tocButton.addEventListener('click',()=>gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE)));
+  $tocButton.addEventListener('click',()=>{
+    toggleLinks(true);
+    gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE));
+  });
   $pageJump.addEventListener('change',goToEnteredPage);
   $pageJump.addEventListener('keydown',e=>{
     if(e.key==='Enter'){
@@ -761,18 +764,18 @@ window.addEventListener('load', async ()=>{
   window.addEventListener('scroll',()=>requestAnimationFrame(updateNavFromScroll));
 
   document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
-  document.getElementById('clear').addEventListener('click',()=>{ for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); } historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout révéler'; });
+  document.getElementById('clear').addEventListener('click',()=>{ for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); } historyStack.length=0; $undo.disabled=true; $revealAll.textContent='Tout rÃ©vÃ©ler'; });
 
   $undo.addEventListener('click', doUndo);
   $undo.disabled = true;
   function doUndo(){
     const allShown=!!pages[0]?.showAll;
-    if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout révéler'; }
+    if(allShown){ for(const p of pages){ p.showAll=false; redrawOverlay(p); } document.getElementById('revealAll').textContent='Tout rÃ©vÃ©ler'; }
     const last=historyStack.pop(); if(!last){ $undo.disabled=true; return; }
     const {page,rect}=last; const i=page.zones.lastIndexOf(rect); if(i!==-1) page.zones.splice(i,1); redrawOverlay(page); $undo.disabled=historyStack.length===0;
   }
 
-  document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler'; });
+  document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout rÃ©vÃ©ler'; });
 
   $viewport.addEventListener('contextmenu',e=>e.preventDefault());
 });
