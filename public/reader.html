@@ -250,15 +250,20 @@ function refreshFitWidthPct(){
   return fitZoomPct;
 }
 function updatePanState(){
-  const shouldEnable=!!firstPageWidth && zoomPct>fitZoomPct && !drawMode && !linkDrawMode;
+  const zoomAllowsPan=!!firstPageWidth && zoomPct>fitZoomPct;
+  const shouldEnable=zoomAllowsPan && !drawMode && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
-  if(!panEnabled){
+  if(!zoomAllowsPan){
     isPanning=false;
     document.body.classList.remove('is-panning');
     panX=0;
     $viewport.style.removeProperty('transform');
   }else{
+    if(!panEnabled){
+      isPanning=false;
+      document.body.classList.remove('is-panning');
+    }
     panX=clamp(panX,-horizontalPanLimit(),horizontalPanLimit());
     applyHorizontalPan();
   }
@@ -273,7 +278,8 @@ function horizontalPanLimit(){
   return Math.ceil(overflow+extraPlay);
 }
 function applyHorizontalPan(){
-  if(!panEnabled || Math.abs(panX)<.5){
+  const zoomAllowsPan=!!firstPageWidth && zoomPct>fitZoomPct;
+  if(!zoomAllowsPan || Math.abs(panX)<.5){
     $viewport.style.removeProperty('transform');
     return;
   }
