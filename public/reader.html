@@ -51,6 +51,7 @@
   /* calques */
   .ov{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1}
   .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3}
+  .dr:focus{outline:none}
 
   /* couche des liens : coordonnées en px natifs + scale CSS */
   .linksLayer{ position:absolute; left:0; top:0; width:0; height:0; z-index:2; pointer-events:auto; transform-origin:top left; }
@@ -900,6 +901,7 @@ function handleAtPoint(p,a,point){
 function drawSelectedAnnotation(p,ctx){
   if(!selectedAnnotation||selectedAnnotation.p!==p||annotationTool!=='select') return;
   const a=selectedAnnotation.annotation;
+  if(pendingTextAnnotation?.annotation===a) return;
   const b=annotationBounds(a);
   if(!b) return;
   const lineWidth=localUiSize(p,2);
@@ -934,6 +936,20 @@ function selectAnnotation(p,annotation){
     annotationFontSize=clamp(parseInt(annotation.fontSize,10)||DEFAULT_TEXT_FONT_PX,12,80);
     $annotationFontSize.value=String(annotationFontSize);
   }
+}
+function deleteSelectedAnnotation(){
+  if(!selectedAnnotation||pendingTextAnnotation) return false;
+  const {p,annotation}=selectedAnnotation;
+  const index=p.annotations.indexOf(annotation);
+  if(index===-1){ clearSelectedAnnotation(); return false; }
+  p.annotations.splice(index,1);
+  historyStack.push({type:'annotation-delete',page:p,annotation,index});
+  $undo.disabled=false;
+  selectedAnnotation=null;
+  saveAnnotations();
+  redrawOverlay(p);
+  redrawDraft(p,null);
+  return true;
 }
 function translateAnnotation(annotation,dx,dy){
   if(['rectangle','ellipse','text'].includes(annotation.kind)){ annotation.x+=dx; annotation.y+=dy; return; }
@@ -1034,7 +1050,10 @@ function finishInlineTextEditor(save=true){
 }
 function openInlineTextEditor(p,annotation,isNew=true){
   if(pendingTextAnnotation) finishInlineTextEditor(true);
-  redrawDraft(p,null);
+  // L'éditeur possède déjà son propre contour pointillé. On retire donc
+  // complètement la sélection bleue pendant la saisie afin qu'un double-clic
+  // n'empile jamais deux encadrements autour du même texte.
+  if(selectedAnnotation) clearSelectedAnnotation(false);
   const textarea=document.createElement('textarea');
   textarea.className='inlineTextEditor';
   textarea.placeholder='Écris ici…';
@@ -1048,6 +1067,7 @@ function openInlineTextEditor(p,annotation,isNew=true){
   p.box.appendChild(textarea);
   pendingTextAnnotation={p,annotation,element:textarea,isNew,before:cloneAnnotation(annotation)};
   redrawOverlay(p);
+  redrawDraft(p,null);
   updateInlineTextEditorScale();
   textarea.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
@@ -1085,6 +1105,11 @@ function attachDrawHandlers(p){
       const handle=current?handleAtPoint(p,current,start):null;
       const hit=handle?current:findAnnotationAt(p,start);
       if(!hit){ clearSelectedAnnotation(); return; }
+      // Le mousedown est volontairement annulé pour empêcher le déplacement
+      // de la page. Sans ce focus explicite, un champ du panneau (notamment la
+      // taille de police) peut rester actif et capter la touche Suppr/Delete.
+      // Le canevas devient la cible clavier de l'objet qui vient d'être choisi.
+      p.canDr.focus({preventScroll:true});
       selectAnnotation(p,hit);
       selectionGesture={
         annotation:hit,
@@ -1186,6 +1211,13 @@ function attachDrawHandlers(p){
     redrawDraft(p,null);
   }
   p.canDr.addEventListener('mousedown',down);
+  p.canDr.addEventListener('keydown',e=>{
+    const deleteKey=e.key==='Delete'||e.key==='Backspace'||e.key==='Del'||e.code==='Delete'||e.keyCode===46;
+    if(!deleteKey||!selectedAnnotation||pendingTextAnnotation) return;
+    e.preventDefault();
+    e.stopPropagation();
+    deleteSelectedAnnotation();
+  });
   p.canDr.addEventListener('dblclick',e=>{
     if(annotationTool!=='select') return;
     const annotation=findAnnotationAt(p,toLocal(e));
@@ -1216,6 +1248,7 @@ function makePage(n){
 
   const canOv=document.createElement('canvas'); canOv.className='ov';
   const canDr=document.createElement('canvas'); canDr.className='dr';
+  canDr.tabIndex=-1;
   box.appendChild(canOv);
 
   const linksLayer=document.createElement('div'); linksLayer.className='linksLayer'; box.appendChild(linksLayer);
@@ -1424,6 +1457,11 @@ window.addEventListener('load', async ()=>{
       if($annotationPopup.classList.contains('open')){ $annotationPopup.classList.remove('open'); return; }
     }
     if(e.target.matches('input,textarea,select')) return;
+    if((e.key==='Delete'||e.key==='Backspace'||e.key==='Del'||e.code==='Delete'||e.keyCode===46)&&selectedAnnotation){
+      e.preventDefault();
+      deleteSelectedAnnotation();
+      return;
+    }
     if(e.key==='ArrowLeft') goto(-1);
     if(e.key==='ArrowRight') goto(+1);
     if(e.key==='+'||e.key==='='){ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); }
@@ -1500,7 +1538,7 @@ window.addEventListener('load', async ()=>{
     if(pendingTextAnnotation) finishInlineTextEditor(false);
     clearSelectedAnnotation(false);
     for(const p of pages){ p.annotations=[]; redrawOverlay(p); redrawDraft(p,null); }
-    for(let i=historyStack.length-1;i>=0;i--) if(historyStack[i].type==='annotation'||historyStack[i].type==='annotation-transform') historyStack.splice(i,1);
+    for(let i=historyStack.length-1;i>=0;i--) if(['annotation','annotation-transform','annotation-delete'].includes(historyStack[i].type)) historyStack.splice(i,1);
     $undo.disabled=historyStack.length===0;
     saveAnnotations();
   });
@@ -1516,6 +1554,12 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       if(selectedAnnotation?.annotation===last.annotation) clearSelectedAnnotation();
+    }else if(last.type==='annotation-delete'){
+      const index=clamp(last.index,0,last.page.annotations.length);
+      last.page.annotations.splice(index,0,last.annotation);
+      saveAnnotations();
+      redrawOverlay(last.page);
+      if(annotationTool==='select') selectAnnotation(last.page,last.annotation);
     }else if(last.type==='annotation-transform'){
       restoreAnnotation(last.annotation,last.before);
       saveAnnotations();
