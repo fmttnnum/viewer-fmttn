@@ -128,10 +128,7 @@
   <div class="section">
     <div class="row"><strong>Liens</strong></div>
     <div class="row">
-      <button id="linksToggle" class="btn btn-amber">Afficher les liens</button>
-    </div>
-    <div class="row" style="font-size:12px;opacity:.7">
-      <span id="linksInfo">Chargement des liens…</span>
+      <button id="linksToggle" class="btn btn-amber">Activer les liens</button>
     </div>
     <div id="linkEditor" class="linkEditor">
       <strong>Encoder un lien</strong>
@@ -144,7 +141,7 @@
       <button id="linkDraw" class="btn btn-dark">Tracer la zone du lien</button>
       <button id="linkDeleteSelected" class="btn" disabled>Supprimer le lien sélectionné</button>
       <button id="linkExport" class="btn btn-amber">Télécharger links.json</button>
-      <div id="linkEditorInfo" class="editorHint">Pour retirer un ancien lien : affiche les liens, puis clique sur sa zone.</div>
+      <div id="linkEditorInfo" class="editorHint">Pour retirer un ancien lien : active les liens, puis clique sur sa zone.</div>
     </div>
   </div>
 
@@ -187,7 +184,6 @@ const $toggleRect=document.getElementById('toggleRect'), $clear=document.getElem
 const $undo=document.getElementById('undo');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
 const $slider=document.getElementById('zoomSlider');
-const $linksInfo=document.getElementById('linksInfo');
 const $linksToggle=document.getElementById('linksToggle');
 const $linkEditor=document.getElementById('linkEditor');
 const $linkKind=document.getElementById('linkKind');
@@ -318,11 +314,10 @@ function loadLinksFromJson(){
     .then(txt=>JSON.parse(txt.replace(/^\uFEFF/,'').trim()))
     .then(data=>{
       LINKS_MAP = data||{};
-      $linksInfo.textContent = `${Object.keys(LINKS_MAP).length} page(s) avec liens • src: links.json`;
       for (const p of pages) mountLinksForPage(p);
       updateLinksInteractivity();
     })
-    .catch(()=>{ $linksInfo.textContent='Aucun lien chargé'; LINKS_MAP={}; });
+    .catch(()=>{ LINKS_MAP={}; });
 }
 function updateLinkLayerScale(p){
   const natW = p.w, natH = p.h;
@@ -392,7 +387,7 @@ function clearSelectedLink(){
 }
 function deleteSelectedLink(){
   if(!selectedLink){
-    $linkEditorInfo.textContent='Affiche les liens, puis clique sur la zone à supprimer.';
+    $linkEditorInfo.textContent='Active les liens, puis clique sur la zone à supprimer.';
     return;
   }
   const {key,index}=selectedLink;
@@ -412,7 +407,7 @@ function toggleLinks(on){
     linkDrawMode=false;
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
-  $linksToggle.textContent=linksVisible?'Masquer les liens':'Afficher les liens';
+  $linksToggle.textContent=linksVisible?'Désactiver les liens':'Activer les liens';
   $linksToggle.classList.toggle('btn-dark',linksVisible);
   updateLinksInteractivity();
 }
@@ -421,7 +416,7 @@ function toggleDrawMode(on){
   if(drawMode){
     linksVisible=false;
     linkDrawMode=false;
-    $linksToggle.textContent='Afficher les liens';
+    $linksToggle.textContent='Activer les liens';
     $linksToggle.classList.remove('btn-dark');
   }
   $toggleRect.textContent='Locales : ' + (drawMode?'ON':'OFF');
