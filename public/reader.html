@@ -323,6 +323,7 @@ let selectedAnnotation=null;
 let annotationFontEditBefore=null;
 let activeAnnotationConstraintRefresh=null;
 let annotationClipboard=null;
+let annotationPointerClient=null;
 
 function updateHistoryButtons(){
   $undo.disabled=correctionHistoryStack.length===0;
@@ -962,6 +963,27 @@ function localUiSize(p,cssPixels){
   const scale=landscapeMode ? r.height/p.w : r.width/p.w;
   return cssPixels/Math.max(scale,.01);
 }
+function pagePointFromClient(p,clientX,clientY){
+  const r=p.canDr.getBoundingClientRect();
+  if(landscapeMode){
+    return {
+      x:(clientY-r.top)*(p.w/r.height),
+      y:(r.right-clientX)*(p.h/r.width)
+    };
+  }
+  return {
+    x:(clientX-r.left)*(p.w/r.width),
+    y:(clientY-r.top)*(p.h/r.height)
+  };
+}
+function pageAtClientPoint(clientX,clientY){
+  for(const p of pages){
+    if(!p.canDr?.isConnected) continue;
+    const r=p.canDr.getBoundingClientRect();
+    if(r.width>0&&r.height>0&&clientX>=r.left&&clientX<=r.right&&clientY>=r.top&&clientY<=r.bottom) return p;
+  }
+  return null;
+}
 function annotationContainsPoint(p,a,point){
   const tolerance=localUiSize(p,10);
   if(a.kind==='line') return distanceToSegment(point,{x:a.x1,y:a.y1},{x:a.x2,y:a.y2})<=tolerance+(a.width||DRAW_WIDTH_PX)/2;
@@ -1087,13 +1109,29 @@ function copySelectedAnnotations(){
 }
 function pasteCopiedAnnotations(){
   if(annotationTool!=='select'||!annotationClipboard||pendingTextAnnotation) return false;
-  const p=selectedAnnotation?.p||annotationClipboard.page;
+  const pointerPage=annotationPointerClient
+    ? pageAtClientPoint(annotationPointerClient.x,annotationPointerClient.y)
+    : null;
+  const p=pointerPage||selectedAnnotation?.p||annotationClipboard.page;
   if(!p||!pages.includes(p)||!annotationClipboard.snapshots.length) return false;
   annotationClipboard.pasteCount+=1;
   const snapshots=annotationClipboard.snapshots.map(cloneAnnotation);
   const annotations=snapshots.map(cloneAnnotation);
-  const offset=localUiSize(p,18)*annotationClipboard.pasteCount;
-  moveAnnotationsFromSnapshots(p,annotations,snapshots,offset,offset);
+  if(pointerPage){
+    const point=pagePointFromClient(p,annotationPointerClient.x,annotationPointerClient.y);
+    const bounds=annotationsBounds(snapshots);
+    const offset=localUiSize(p,12);
+    moveAnnotationsFromSnapshots(
+      p,
+      annotations,
+      snapshots,
+      point.x+offset-bounds.x,
+      point.y+offset-bounds.y
+    );
+  }else{
+    const offset=localUiSize(p,18)*annotationClipboard.pasteCount;
+    moveAnnotationsFromSnapshots(p,annotations,snapshots,offset,offset);
+  }
   const items=annotations.map(annotation=>{
     const index=p.annotations.length;
     p.annotations.push(annotation);
@@ -1169,6 +1207,21 @@ function redrawDraft(p,d){
   ctx.clearRect(0,0,p.w,p.h);
   drawSelectedAnnotation(p,ctx);
   if(!d) return;
+  if(d.kind==='annotation-transfer-preview'){
+    ctx.save();
+    ctx.globalAlpha=.78;
+    for(const annotation of d.annotations||[]) drawAnnotation(ctx,annotation);
+    ctx.globalAlpha=1;
+    const b=annotationsBounds(d.annotations||[]);
+    if(b){
+      ctx.strokeStyle='#2563eb';
+      ctx.lineWidth=localUiSize(p,2);
+      ctx.setLineDash([localUiSize(p,7),localUiSize(p,5)]);
+      ctx.strokeRect(b.x,b.y,Math.max(b.w,ctx.lineWidth),Math.max(b.h,ctx.lineWidth));
+    }
+    ctx.restore();
+    return;
+  }
   if(d.kind==='selection-box'){
     const r=normalizedBox(d);
     ctx.save();
@@ -1298,16 +1351,14 @@ function attachDrawHandlers(p){
   let draft=null;
   let selectionGesture=null;
   let lastDraftPoint=null;
-  const toLocal=e=>{
-    const r=p.canDr.getBoundingClientRect();
-    if(landscapeMode){
-      return {
-        x:(e.clientY-r.top)*(p.w/r.height),
-        y:(r.right-e.clientX)*(p.h/r.width)
-      };
-    }
-    return {x:(e.clientX-r.left)*(p.w/r.width),y:(e.clientY-r.top)*(p.h/r.height)};
-  };
+  const toLocal=e=>pagePointFromClient(p,e.clientX,e.clientY);
+  function clearTransferPreview(gesture){
+    if(!gesture?.previewPage) return;
+    const previewPage=gesture.previewPage;
+    gesture.previewPage=null;
+    gesture.previewAnnotations=null;
+    redrawDraft(previewPage,null);
+  }
   function updateDraftFromPoint(point,constrain=false){
     if(!draft) return;
     if(draft.kind==='highlight'){
@@ -1368,6 +1419,10 @@ function attachDrawHandlers(p){
         annotation:hit,
         annotations,
         before:annotations.map(cloneAnnotation),
+        sourceItems:annotations.map(annotation=>({annotation,index:p.annotations.indexOf(annotation)})),
+        sourceBounds:annotationsBounds(annotations),
+        sourcePage:p,
+        targetPage:p,
         start,
         handle:annotations.length===1?handle?.name||null:null,
         changed:false
@@ -1386,18 +1441,64 @@ function attachDrawHandlers(p){
   }
   function move(e){
     if(selectionGesture){
-      const point=toLocal(e);
       if(selectionGesture.marquee){
+        const point=toLocal(e);
         selectionGesture.current=point;
         selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
         redrawDraft(p,{kind:'selection-box',x:selectionGesture.start.x,y:selectionGesture.start.y,w:point.x-selectionGesture.start.x,h:point.y-selectionGesture.start.y});
         return;
       }
-      if(selectionGesture.handle) resizeAnnotationFromSnapshot(p,selectionGesture.annotation,selectionGesture.before[0],selectionGesture.handle,point);
-      else moveAnnotationsFromSnapshots(p,selectionGesture.annotations,selectionGesture.before,point.x-selectionGesture.start.x,point.y-selectionGesture.start.y);
-      selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
-      redrawOverlay(p);
-      redrawDraft(p,null);
+      const sourcePage=selectionGesture.sourcePage;
+      const targetPage=selectionGesture.handle ? sourcePage : pageAtClientPoint(e.clientX,e.clientY);
+      if(!targetPage){
+        clearTransferPreview(selectionGesture);
+        selectionGesture.targetPage=sourcePage;
+        selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
+        selectionGesture.changed=false;
+        redrawOverlay(sourcePage);
+        redrawDraft(sourcePage,null);
+        return;
+      }
+      const point=pagePointFromClient(targetPage,e.clientX,e.clientY);
+      if(targetPage===sourcePage){
+        clearTransferPreview(selectionGesture);
+        selectionGesture.targetPage=sourcePage;
+        selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
+        if(selectionGesture.handle){
+          resizeAnnotationFromSnapshot(sourcePage,selectionGesture.annotation,selectionGesture.before[0],selectionGesture.handle,point);
+        }else{
+          moveAnnotationsFromSnapshots(
+            sourcePage,
+            selectionGesture.annotations,
+            selectionGesture.before,
+            point.x-selectionGesture.start.x,
+            point.y-selectionGesture.start.y
+          );
+        }
+        selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
+        redrawOverlay(sourcePage);
+        redrawDraft(sourcePage,null);
+        return;
+      }
+      selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
+      redrawOverlay(sourcePage);
+      redrawDraft(sourcePage,null);
+      if(selectionGesture.previewPage&&selectionGesture.previewPage!==targetPage) clearTransferPreview(selectionGesture);
+      const previewAnnotations=selectionGesture.before.map(cloneAnnotation);
+      const anchorX=selectionGesture.start.x-selectionGesture.sourceBounds.x;
+      const anchorY=selectionGesture.start.y-selectionGesture.sourceBounds.y;
+      moveAnnotationsFromSnapshots(
+        targetPage,
+        previewAnnotations,
+        selectionGesture.before,
+        point.x-anchorX-selectionGesture.sourceBounds.x,
+        point.y-anchorY-selectionGesture.sourceBounds.y
+      );
+      selectionGesture.targetPage=targetPage;
+      selectionGesture.previewPage=targetPage;
+      selectionGesture.previewAnnotations=previewAnnotations;
+      selectionGesture.changed=true;
+      redrawDraft(targetPage,{kind:'annotation-transfer-preview',annotations:previewAnnotations});
       return;
     }
     if((!drawMode&&!annotationTool&&!linkDrawMode)||!draft) return;
@@ -1424,6 +1525,41 @@ function attachDrawHandlers(p){
         selectAnnotations(p,matches);
         return;
       }
+      if(gesture.targetPage&&gesture.targetPage!==gesture.sourcePage&&gesture.previewAnnotations){
+        const sourcePage=gesture.sourcePage;
+        const targetPage=gesture.targetPage;
+        const transferredSnapshots=gesture.previewAnnotations.map(cloneAnnotation);
+        clearTransferPreview(gesture);
+        gesture.sourceItems.slice().sort((a,b)=>b.index-a.index).forEach(item=>{
+          const index=sourcePage.annotations.indexOf(item.annotation);
+          if(index!==-1) sourcePage.annotations.splice(index,1);
+        });
+        const targetItems=[];
+        gesture.annotations.forEach((annotation,index)=>{
+          restoreAnnotation(annotation,transferredSnapshots[index]);
+          const targetIndex=targetPage.annotations.length;
+          targetPage.annotations.push(annotation);
+          targetItems.push({annotation,index:targetIndex});
+        });
+        recordAnnotationHistory({
+          type:'annotation-transfer-multiple',
+          sourcePage,
+          targetPage,
+          annotations:gesture.annotations,
+          sourceItems:gesture.sourceItems,
+          targetItems,
+          before:gesture.before,
+          after:gesture.annotations.map(cloneAnnotation)
+        });
+        saveAnnotations();
+        redrawOverlay(sourcePage);
+        redrawDraft(sourcePage,null);
+        redrawOverlay(targetPage);
+        selectAnnotations(targetPage,gesture.annotations);
+        targetPage.canDr.focus({preventScroll:true});
+        return;
+      }
+      clearTransferPreview(gesture);
       if(gesture.changed){
         if(gesture.annotations.length===1){
           recordAnnotationHistory({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0],after:cloneAnnotation(gesture.annotation)});
@@ -1735,6 +1871,9 @@ window.addEventListener('load', async ()=>{
       $pageJump.select();
     }
   });
+  document.addEventListener('pointermove',e=>{
+    annotationPointerClient={x:e.clientX,y:e.clientY};
+  },{passive:true});
   document.addEventListener('keydown',e=>{
     if(e.key==='Shift'&&activeAnnotationConstraintRefresh){
       activeAnnotationConstraintRefresh(true);
@@ -1888,6 +2027,21 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(last.page);
       redrawDraft(last.page,null);
+    }else if(last.type==='annotation-transfer-multiple'){
+      for(const annotation of last.annotations){
+        const index=last.targetPage.annotations.indexOf(annotation);
+        if(index!==-1) last.targetPage.annotations.splice(index,1);
+      }
+      last.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,last.before[index]));
+      for(const item of last.sourceItems.slice().sort((a,b)=>a.index-b.index)){
+        if(last.sourcePage.annotations.includes(item.annotation)) continue;
+        last.sourcePage.annotations.splice(clamp(item.index,0,last.sourcePage.annotations.length),0,item.annotation);
+      }
+      saveAnnotations();
+      redrawOverlay(last.targetPage);
+      redrawDraft(last.targetPage,null);
+      redrawOverlay(last.sourcePage);
+      if(annotationTool==='select') selectAnnotations(last.sourcePage,last.annotations);
     }else if(last.type==='annotation-clear-all'){
       for(const entry of last.pages){
         for(const item of entry.items){
@@ -1948,6 +2102,21 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
       redrawOverlay(next.page);
       if(annotationTool==='select') selectAnnotations(next.page,next.items.map(item=>item.annotation));
+    }else if(next.type==='annotation-transfer-multiple'){
+      for(const annotation of next.annotations){
+        const index=next.sourcePage.annotations.indexOf(annotation);
+        if(index!==-1) next.sourcePage.annotations.splice(index,1);
+      }
+      next.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,next.after[index]));
+      for(const item of next.targetItems.slice().sort((a,b)=>a.index-b.index)){
+        if(next.targetPage.annotations.includes(item.annotation)) continue;
+        next.targetPage.annotations.splice(clamp(item.index,0,next.targetPage.annotations.length),0,item.annotation);
+      }
+      saveAnnotations();
+      redrawOverlay(next.sourcePage);
+      redrawDraft(next.sourcePage,null);
+      redrawOverlay(next.targetPage);
+      if(annotationTool==='select') selectAnnotations(next.targetPage,next.annotations);
     }else if(next.type==='annotation-clear-all'){
       clearSelectedAnnotation(false);
       for(const entry of next.pages){
