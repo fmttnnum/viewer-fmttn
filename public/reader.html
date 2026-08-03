@@ -271,6 +271,8 @@ const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
 const ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
 const DRAW_WIDTH_PX = 7;
 const DEFAULT_TEXT_FONT_PX = 67;
+const ROTATION_SNAP_TOLERANCE_DEG = 8;
+const ROTATION_SNAP_ANGLES_DEG = [90,180,270];
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
@@ -966,6 +968,24 @@ function normalizeRotationDegrees(value){
   const degrees=Number.isFinite(Number(value))?Number(value):0;
   return ((degrees%360)+360)%360;
 }
+function shortestAngleDifferenceRadians(target,current){
+  let difference=target-current;
+  while(difference>Math.PI) difference-=Math.PI*2;
+  while(difference<-Math.PI) difference+=Math.PI*2;
+  return difference;
+}
+function constrainRotationDelta(frame,delta,constrain=false){
+  if(!constrain) return delta;
+  const finalAngle=(frame.angle||0)+delta;
+  let nearestDifference=null;
+  for(const degrees of ROTATION_SNAP_ANGLES_DEG){
+    const target=degrees*Math.PI/180;
+    const difference=shortestAngleDifferenceRadians(target,finalAngle);
+    if(nearestDifference===null||Math.abs(difference)<Math.abs(nearestDifference)) nearestDifference=difference;
+  }
+  const tolerance=ROTATION_SNAP_TOLERANCE_DEG*Math.PI/180;
+  return nearestDifference!==null&&Math.abs(nearestDifference)<=tolerance ? delta+nearestDifference : delta;
+}
 function annotationRotationRadians(a){
   return normalizeRotationDegrees(a?.rotation)*Math.PI/180;
 }
@@ -1517,10 +1537,34 @@ function attachDrawHandlers(p){
     updateDraftFromPoint(lastDraftPoint,constrain);
     redrawDraft(p,draft);
   }
+  function updateRotationFromPoint(point,constrain=false){
+    if(!selectionGesture?.rotating) return;
+    const sourcePage=selectionGesture.sourcePage;
+    const frame=selectionGesture.rotationFrame;
+    selectionGesture.rotationPoint=point;
+    const currentAngle=Math.atan2(point.y-frame.center.y,point.x-frame.center.x);
+    let delta=currentAngle-selectionGesture.rotationStartAngle;
+    while(delta>Math.PI) delta-=Math.PI*2;
+    while(delta<-Math.PI) delta+=Math.PI*2;
+    delta=constrainRotationDelta(frame,delta,constrain);
+    const correction=rotateAnnotationsFromSnapshots(sourcePage,selectionGesture.annotations,selectionGesture.before,frame.center,delta);
+    selectedAnnotation.frame={
+      center:{x:frame.center.x+correction.dx,y:frame.center.y+correction.dy},
+      w:frame.w,h:frame.h,angle:(frame.angle||0)+delta
+    };
+    selectionGesture.changed=Math.abs(delta)>Math.PI/720;
+    redrawOverlay(sourcePage);
+    redrawDraft(sourcePage,null);
+  }
+  function refreshRotationConstraint(constrain){
+    if(!selectionGesture?.rotating||!selectionGesture.rotationPoint) return;
+    updateRotationFromPoint(selectionGesture.rotationPoint,constrain);
+  }
   function down(e){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
     if(e.button!==undefined&&e.button!==0) return;
     e.preventDefault();
+    activeAnnotationConstraintRefresh=null;
     if(pendingTextAnnotation){ finishInlineTextEditor(true); return; }
     const start=toLocal(e);
     if(annotationTool==='select'){
@@ -1559,6 +1603,7 @@ function attachDrawHandlers(p){
         rotationStartAngle:rotateHandle?Math.atan2(start.y-selectionFrame.center.y,start.x-selectionFrame.center.x):null,
         changed:false
       };
+      if(rotateHandle) activeAnnotationConstraintRefresh=refreshRotationConstraint;
       document.body.classList.add('annotation-dragging');
       return;
     }
@@ -1582,20 +1627,7 @@ function attachDrawHandlers(p){
       }
       const sourcePage=selectionGesture.sourcePage;
       if(selectionGesture.rotating){
-        const point=toLocal(e);
-        const frame=selectionGesture.rotationFrame;
-        const currentAngle=Math.atan2(point.y-frame.center.y,point.x-frame.center.x);
-        let delta=currentAngle-selectionGesture.rotationStartAngle;
-        while(delta>Math.PI) delta-=Math.PI*2;
-        while(delta<-Math.PI) delta+=Math.PI*2;
-        const correction=rotateAnnotationsFromSnapshots(sourcePage,selectionGesture.annotations,selectionGesture.before,frame.center,delta);
-        selectedAnnotation.frame={
-          center:{x:frame.center.x+correction.dx,y:frame.center.y+correction.dy},
-          w:frame.w,h:frame.h,angle:(frame.angle||0)+delta
-        };
-        selectionGesture.changed=Math.abs(delta)>Math.PI/720;
-        redrawOverlay(sourcePage);
-        redrawDraft(sourcePage,null);
+        updateRotationFromPoint(toLocal(e),e.shiftKey);
         return;
       }
       const targetPage=selectionGesture.handle ? sourcePage : pageAtClientPoint(e.clientX,e.clientY);
