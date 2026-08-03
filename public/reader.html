@@ -120,6 +120,7 @@
   .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
   .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
   .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  .annotationHistoryButton svg{width:20px;height:20px;display:block;stroke:currentColor}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
   .inlineTextEditorFrame{position:absolute;z-index:4;margin:0;padding:0;border:0;outline:3px dashed currentColor;outline-offset:0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;box-sizing:border-box}
   .inlineTextEditor{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;color:inherit;caret-color:currentColor;box-sizing:border-box}
@@ -242,7 +243,7 @@
   <div class="annotationActions">
     <button id="annotationUndo" class="btn annotationHistoryButton" title="Annuler la dernière action d'annotation" aria-label="Annuler la dernière action d'annotation" disabled>↶</button>
     <button id="annotationRedo" class="btn annotationHistoryButton" title="Rétablir la dernière action d'annotation" aria-label="Rétablir la dernière action d'annotation" disabled>↷</button>
-    <button id="annotationClearAll" class="btn annotationHistoryButton" title="Effacer toutes les annotations" aria-label="Effacer toutes les annotations" disabled>🗑</button>
+    <button id="annotationClearAll" class="btn annotationHistoryButton" title="Effacer toutes les annotations" aria-label="Effacer toutes les annotations" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.8c0-.44.36-.8.8-.8h4.4c.44 0 .8.36.8.8V7M7 7l.7 12.2c.03.45.4.8.85.8h6.9c.45 0 .82-.35.85-.8L18 7M10 10.5v6M14 10.5v6"/></svg></button>
   </div>
 </div>
 
@@ -886,6 +887,15 @@ function wrappedTextLines(ctx,text,maxWidth){
 function drawAnnotation(ctx,a){
   if(!a||pendingTextAnnotation?.annotation===a) return;
   ctx.save();
+  const baseBounds=annotationBaseBounds(a);
+  const rotation=annotationRotationRadians(a);
+  if(baseBounds&&rotation){
+    const centerX=baseBounds.x+baseBounds.w/2;
+    const centerY=baseBounds.y+baseBounds.h/2;
+    ctx.translate(centerX,centerY);
+    ctx.rotate(rotation);
+    ctx.translate(-centerX,-centerY);
+  }
   ctx.strokeStyle=a.color||'#ffe100';
   ctx.fillStyle=a.color||'#ffe100';
   ctx.lineCap='round';
@@ -932,7 +942,7 @@ function restoreAnnotation(annotation,snapshot){
   for(const key of Object.keys(annotation)) delete annotation[key];
   Object.assign(annotation,cloneAnnotation(snapshot));
 }
-function annotationBounds(a){
+function annotationBaseBounds(a){
   if(!a) return null;
   if(a.kind==='highlight'){
     const y1=Number.isFinite(a.y1)?a.y1:a.y;
@@ -951,6 +961,41 @@ function annotationBounds(a){
   }
   if(['rectangle','ellipse','text'].includes(a.kind)) return {x:a.x,y:a.y,w:a.w,h:a.h};
   return null;
+}
+function normalizeRotationDegrees(value){
+  const degrees=Number.isFinite(Number(value))?Number(value):0;
+  return ((degrees%360)+360)%360;
+}
+function annotationRotationRadians(a){
+  return normalizeRotationDegrees(a?.rotation)*Math.PI/180;
+}
+function rotatePointAround(point,center,angle){
+  if(!angle) return {x:point.x,y:point.y};
+  const cos=Math.cos(angle), sin=Math.sin(angle);
+  const dx=point.x-center.x, dy=point.y-center.y;
+  return {x:center.x+dx*cos-dy*sin,y:center.y+dx*sin+dy*cos};
+}
+function annotationFrame(a){
+  const b=annotationBaseBounds(a);
+  if(!b) return null;
+  return {center:{x:b.x+b.w/2,y:b.y+b.h/2},w:b.w,h:b.h,angle:annotationRotationRadians(a)};
+}
+function frameCorners(frame){
+  if(!frame) return [];
+  const {center,w,h,angle=0}=frame;
+  return [
+    {name:'nw',x:center.x-w/2,y:center.y-h/2},
+    {name:'ne',x:center.x+w/2,y:center.y-h/2},
+    {name:'se',x:center.x+w/2,y:center.y+h/2},
+    {name:'sw',x:center.x-w/2,y:center.y+h/2}
+  ].map(point=>Object.assign(rotatePointAround(point,center,angle),{name:point.name}));
+}
+function annotationBounds(a){
+  const frame=annotationFrame(a);
+  const corners=frameCorners(frame);
+  if(!corners.length) return null;
+  const xs=corners.map(point=>point.x), ys=corners.map(point=>point.y);
+  return {x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
 }
 function distanceToSegment(point,a,b){
   const dx=b.x-a.x, dy=b.y-a.y;
@@ -986,19 +1031,23 @@ function pageAtClientPoint(clientX,clientY){
 }
 function annotationContainsPoint(p,a,point){
   const tolerance=localUiSize(p,10);
-  if(a.kind==='line') return distanceToSegment(point,{x:a.x1,y:a.y1},{x:a.x2,y:a.y2})<=tolerance+(a.width||DRAW_WIDTH_PX)/2;
+  const base=annotationBaseBounds(a);
+  const angle=annotationRotationRadians(a);
+  const localPoint=base&&angle
+    ? rotatePointAround(point,{x:base.x+base.w/2,y:base.y+base.h/2},-angle)
+    : point;
+  if(a.kind==='line') return distanceToSegment(localPoint,{x:a.x1,y:a.y1},{x:a.x2,y:a.y2})<=tolerance+(a.width||DRAW_WIDTH_PX)/2;
   if(a.kind==='highlight'){
     const y1=Number.isFinite(a.y1)?a.y1:a.y;
     const y2=Number.isFinite(a.y2)?a.y2:a.y;
-    return distanceToSegment(point,{x:a.x1,y:y1},{x:a.x2,y:y2})<=tolerance+(a.width||HIGHLIGHT_WIDTH_PX)/2;
+    return distanceToSegment(localPoint,{x:a.x1,y:y1},{x:a.x2,y:y2})<=tolerance+(a.width||HIGHLIGHT_WIDTH_PX)/2;
   }
   if(a.kind==='freehand'){
     const points=a.points||[];
-    for(let i=1;i<points.length;i++) if(distanceToSegment(point,points[i-1],points[i])<=tolerance+(a.width||DRAW_WIDTH_PX)/2) return true;
-    return points.length===1&&Math.hypot(point.x-points[0].x,point.y-points[0].y)<=tolerance;
+    for(let i=1;i<points.length;i++) if(distanceToSegment(localPoint,points[i-1],points[i])<=tolerance+(a.width||DRAW_WIDTH_PX)/2) return true;
+    return points.length===1&&Math.hypot(localPoint.x-points[0].x,localPoint.y-points[0].y)<=tolerance;
   }
-  const b=annotationBounds(a);
-  return !!b&&point.x>=b.x-tolerance&&point.x<=b.x+b.w+tolerance&&point.y>=b.y-tolerance&&point.y<=b.y+b.h+tolerance;
+  return !!base&&localPoint.x>=base.x-tolerance&&localPoint.x<=base.x+base.w+tolerance&&localPoint.y>=base.y-tolerance&&localPoint.y<=base.y+base.h+tolerance;
 }
 function findAnnotationAt(p,point){
   const list=p.annotations||[];
@@ -1010,11 +1059,7 @@ function isResizableAnnotation(a){
 }
 function annotationHandles(a){
   if(!isResizableAnnotation(a)) return [];
-  const b=annotationBounds(a);
-  return [
-    {name:'nw',x:b.x,y:b.y},{name:'ne',x:b.x+b.w,y:b.y},
-    {name:'se',x:b.x+b.w,y:b.y+b.h},{name:'sw',x:b.x,y:b.y+b.h}
-  ];
+  return frameCorners(annotationFrame(a));
 }
 function selectedAnnotationList(){
   if(!selectedAnnotation) return [];
@@ -1036,12 +1081,34 @@ function handleAtPoint(p,a,point){
   const radius=localUiSize(p,12);
   return annotationHandles(a).find(handle=>Math.hypot(point.x-handle.x,point.y-handle.y)<=radius)||null;
 }
+function selectedAnnotationFrame(){
+  const annotations=selectedAnnotationList();
+  if(!annotations.length) return null;
+  if(selectedAnnotation?.frame) return selectedAnnotation.frame;
+  if(annotations.length===1) return annotationFrame(annotations[0]);
+  const b=annotationsBounds(annotations);
+  return b?{center:{x:b.x+b.w/2,y:b.y+b.h/2},w:b.w,h:b.h,angle:0}:null;
+}
+function rotationHandleForFrame(p,frame){
+  if(!frame) return null;
+  const corners=frameCorners(frame);
+  const ne=corners.find(point=>point.name==='ne');
+  const offset=localUiSize(p,30);
+  const outward={x:Math.sin(frame.angle||0),y:-Math.cos(frame.angle||0)};
+  return {x:ne.x+outward.x*offset,y:ne.y+outward.y*offset,corner:ne,outward};
+}
+function rotationHandleAtPoint(p,point){
+  const handle=rotationHandleForFrame(p,selectedAnnotationFrame());
+  const radius=localUiSize(p,14);
+  return handle&&Math.hypot(point.x-handle.x,point.y-handle.y)<=radius?handle:null;
+}
 function drawSelectedAnnotation(p,ctx){
   if(!selectedAnnotation||selectedAnnotation.p!==p||annotationTool!=='select') return;
   const annotations=selectedAnnotationList();
   if(annotations.length===1&&pendingTextAnnotation?.annotation===annotations[0]) return;
-  const b=annotationsBounds(annotations);
-  if(!b) return;
+  const frame=selectedAnnotationFrame();
+  const corners=frameCorners(frame);
+  if(!frame||!corners.length) return;
   const lineWidth=localUiSize(p,2);
   const radius=localUiSize(p,6);
   ctx.save();
@@ -1049,12 +1116,40 @@ function drawSelectedAnnotation(p,ctx){
   ctx.fillStyle='#fff';
   ctx.lineWidth=lineWidth;
   ctx.setLineDash([localUiSize(p,7),localUiSize(p,5)]);
-  ctx.strokeRect(b.x,b.y,Math.max(b.w,lineWidth),Math.max(b.h,lineWidth));
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x,corners[0].y);
+  for(let i=1;i<corners.length;i++) ctx.lineTo(corners[i].x,corners[i].y);
+  ctx.closePath();
+  ctx.stroke();
   ctx.setLineDash([]);
   if(annotations.length===1){
     for(const handle of annotationHandles(annotations[0])){
       ctx.beginPath(); ctx.rect(handle.x-radius,handle.y-radius,radius*2,radius*2); ctx.fill(); ctx.stroke();
     }
+  }
+  const rotateHandle=rotationHandleForFrame(p,frame);
+  if(rotateHandle){
+    const handleRadius=localUiSize(p,10);
+    const arrowRadius=localUiSize(p,5.5);
+    ctx.beginPath();
+    ctx.moveTo(rotateHandle.corner.x,rotateHandle.corner.y);
+    ctx.lineTo(rotateHandle.x,rotateHandle.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(rotateHandle.x,rotateHandle.y,handleRadius,0,Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='#2563eb';
+    ctx.lineWidth=localUiSize(p,1.8);
+    ctx.beginPath();
+    ctx.arc(rotateHandle.x,rotateHandle.y,arrowRadius,-Math.PI*.2,Math.PI*1.25);
+    ctx.stroke();
+    const arrowAngle=Math.PI*1.25;
+    const tip={x:rotateHandle.x+Math.cos(arrowAngle)*arrowRadius,y:rotateHandle.y+Math.sin(arrowAngle)*arrowRadius};
+    ctx.beginPath();
+    ctx.moveTo(tip.x,tip.y);
+    ctx.lineTo(tip.x+localUiSize(p,1),tip.y-localUiSize(p,4));
+    ctx.lineTo(tip.x+localUiSize(p,4),tip.y-localUiSize(p,1));
+    ctx.closePath(); ctx.fillStyle='#2563eb'; ctx.fill();
   }
   ctx.restore();
 }
@@ -1070,7 +1165,7 @@ function selectAnnotations(p,annotations){
   const previous=selectedAnnotation?.p;
   const unique=[...new Set((annotations||[]).filter(Boolean))];
   const annotation=unique[0]||null;
-  selectedAnnotation=annotation?{p,annotation,annotations:unique}:null;
+  selectedAnnotation=annotation?{p,annotation,annotations:unique,frame:null}:null;
   if(previous&&previous!==p) redrawDraft(previous,null);
   redrawDraft(p,null);
   if(unique.length===1&&annotation?.color){
@@ -1193,14 +1288,43 @@ function moveAnnotationsFromSnapshots(p,annotations,snapshots,dx,dy){
 }
 function resizeAnnotationFromSnapshot(p,annotation,snapshot,handle,point){
   restoreAnnotation(annotation,snapshot);
-  const b=annotationBounds(snapshot);
+  const b=annotationBaseBounds(snapshot);
+  const angle=annotationRotationRadians(snapshot);
+  const originalCenter={x:b.x+b.w/2,y:b.y+b.h/2};
+  const localPoint=rotatePointAround(point,originalCenter,-angle);
   const minSize=localUiSize(p,24);
   let left=b.x, top=b.y, right=b.x+b.w, bottom=b.y+b.h;
-  if(handle.includes('w')) left=clamp(point.x,0,right-minSize);
-  if(handle.includes('e')) right=clamp(point.x,left+minSize,p.w);
-  if(handle.includes('n')) top=clamp(point.y,0,bottom-minSize);
-  if(handle.includes('s')) bottom=clamp(point.y,top+minSize,p.h);
-  annotation.x=left; annotation.y=top; annotation.w=right-left; annotation.h=bottom-top;
+  if(handle.includes('w')) left=Math.min(localPoint.x,right-minSize);
+  if(handle.includes('e')) right=Math.max(localPoint.x,left+minSize);
+  if(handle.includes('n')) top=Math.min(localPoint.y,bottom-minSize);
+  if(handle.includes('s')) bottom=Math.max(localPoint.y,top+minSize);
+  const localCenter={x:(left+right)/2,y:(top+bottom)/2};
+  const worldCenter=rotatePointAround(localCenter,originalCenter,angle);
+  annotation.w=right-left; annotation.h=bottom-top;
+  annotation.x=worldCenter.x-annotation.w/2;
+  annotation.y=worldCenter.y-annotation.h/2;
+  const rotatedBounds=annotationBounds(annotation);
+  const dx=clamp(0,-rotatedBounds.x,p.w-(rotatedBounds.x+rotatedBounds.w));
+  const dy=clamp(0,-rotatedBounds.y,p.h-(rotatedBounds.y+rotatedBounds.h));
+  if(dx||dy) translateAnnotation(annotation,dx,dy);
+}
+function rotateAnnotationsFromSnapshots(p,annotations,snapshots,center,delta){
+  annotations.forEach((annotation,index)=>{
+    const snapshot=snapshots[index];
+    restoreAnnotation(annotation,snapshot);
+    const b=annotationBaseBounds(snapshot);
+    if(!b) return;
+    const ownCenter={x:b.x+b.w/2,y:b.y+b.h/2};
+    const rotatedCenter=rotatePointAround(ownCenter,center,delta);
+    translateAnnotation(annotation,rotatedCenter.x-ownCenter.x,rotatedCenter.y-ownCenter.y);
+    annotation.rotation=normalizeRotationDegrees((Number(snapshot.rotation)||0)+delta*180/Math.PI);
+  });
+  const bounds=annotationsBounds(annotations);
+  if(!bounds) return {dx:0,dy:0};
+  const dx=clamp(0,-bounds.x,p.w-(bounds.x+bounds.w));
+  const dy=clamp(0,-bounds.y,p.h-(bounds.y+bounds.h));
+  if(dx||dy) annotations.forEach(annotation=>translateAnnotation(annotation,dx,dy));
+  return {dx,dy};
 }
 function redrawDraft(p,d){
   const ctx=p.canDr.getContext('2d');
@@ -1324,6 +1448,8 @@ function openInlineTextEditor(p,annotation,isNew=true){
   frame.style.width=(annotation.w/p.w*100)+'%';
   frame.style.height=(annotation.h/p.h*100)+'%';
   frame.style.color=annotation.color;
+  frame.style.transform=`rotate(${normalizeRotationDegrees(annotation.rotation)}deg)`;
+  frame.style.transformOrigin='center center';
   const textarea=document.createElement('textarea');
   textarea.className='inlineTextEditor';
   textarea.placeholder='Écris ici…';
@@ -1400,8 +1526,9 @@ function attachDrawHandlers(p){
     if(annotationTool==='select'){
       const currentAnnotations=selectedAnnotation?.p===p?selectedAnnotationList():[];
       const current=currentAnnotations.length===1?currentAnnotations[0]:null;
+      const rotateHandle=currentAnnotations.length?rotationHandleAtPoint(p,start):null;
       const handle=current?handleAtPoint(p,current,start):null;
-      const hit=handle?current:findAnnotationAt(p,start);
+      const hit=(rotateHandle||handle)?(current||currentAnnotations[0]):findAnnotationAt(p,start);
       if(!hit){
         clearSelectedAnnotation(false);
         selectionGesture={marquee:true,start,current:start,changed:false};
@@ -1415,6 +1542,7 @@ function attachDrawHandlers(p){
       p.canDr.focus({preventScroll:true});
       const annotations=currentAnnotations.includes(hit)?currentAnnotations:[hit];
       if(!currentAnnotations.includes(hit)) selectAnnotation(p,hit);
+      const selectionFrame=selectedAnnotationFrame();
       selectionGesture={
         annotation:hit,
         annotations,
@@ -1424,7 +1552,11 @@ function attachDrawHandlers(p){
         sourcePage:p,
         targetPage:p,
         start,
-        handle:annotations.length===1?handle?.name||null:null,
+        handle:!rotateHandle&&annotations.length===1?handle?.name||null:null,
+        rotating:!!rotateHandle,
+        selectionFrame,
+        rotationFrame:rotateHandle?selectionFrame:null,
+        rotationStartAngle:rotateHandle?Math.atan2(start.y-selectionFrame.center.y,start.x-selectionFrame.center.x):null,
         changed:false
       };
       document.body.classList.add('annotation-dragging');
@@ -1449,11 +1581,29 @@ function attachDrawHandlers(p){
         return;
       }
       const sourcePage=selectionGesture.sourcePage;
+      if(selectionGesture.rotating){
+        const point=toLocal(e);
+        const frame=selectionGesture.rotationFrame;
+        const currentAngle=Math.atan2(point.y-frame.center.y,point.x-frame.center.x);
+        let delta=currentAngle-selectionGesture.rotationStartAngle;
+        while(delta>Math.PI) delta-=Math.PI*2;
+        while(delta<-Math.PI) delta+=Math.PI*2;
+        const correction=rotateAnnotationsFromSnapshots(sourcePage,selectionGesture.annotations,selectionGesture.before,frame.center,delta);
+        selectedAnnotation.frame={
+          center:{x:frame.center.x+correction.dx,y:frame.center.y+correction.dy},
+          w:frame.w,h:frame.h,angle:(frame.angle||0)+delta
+        };
+        selectionGesture.changed=Math.abs(delta)>Math.PI/720;
+        redrawOverlay(sourcePage);
+        redrawDraft(sourcePage,null);
+        return;
+      }
       const targetPage=selectionGesture.handle ? sourcePage : pageAtClientPoint(e.clientX,e.clientY);
       if(!targetPage){
         clearTransferPreview(selectionGesture);
         selectionGesture.targetPage=sourcePage;
         selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
+        selectedAnnotation.frame=selectionGesture.selectionFrame;
         selectionGesture.changed=false;
         redrawOverlay(sourcePage);
         redrawDraft(sourcePage,null);
@@ -1466,6 +1616,7 @@ function attachDrawHandlers(p){
         selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
         if(selectionGesture.handle){
           resizeAnnotationFromSnapshot(sourcePage,selectionGesture.annotation,selectionGesture.before[0],selectionGesture.handle,point);
+          selectedAnnotation.frame=null;
         }else{
           moveAnnotationsFromSnapshots(
             sourcePage,
@@ -1474,6 +1625,19 @@ function attachDrawHandlers(p){
             point.x-selectionGesture.start.x,
             point.y-selectionGesture.start.y
           );
+          if(selectionGesture.selectionFrame){
+            const movedBounds=annotationsBounds(selectionGesture.annotations);
+            const beforeBounds=annotationsBounds(selectionGesture.before);
+            selectedAnnotation.frame={
+              center:{
+                x:selectionGesture.selectionFrame.center.x+(movedBounds.x-beforeBounds.x),
+                y:selectionGesture.selectionFrame.center.y+(movedBounds.y-beforeBounds.y)
+              },
+              w:selectionGesture.selectionFrame.w,
+              h:selectionGesture.selectionFrame.h,
+              angle:selectionGesture.selectionFrame.angle
+            };
+          }
         }
         selectionGesture.changed=Math.hypot(point.x-selectionGesture.start.x,point.y-selectionGesture.start.y)>1;
         redrawOverlay(sourcePage);
@@ -1481,6 +1645,7 @@ function attachDrawHandlers(p){
         return;
       }
       selectionGesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,selectionGesture.before[index]));
+      selectedAnnotation.frame=selectionGesture.selectionFrame;
       redrawOverlay(sourcePage);
       redrawDraft(sourcePage,null);
       if(selectionGesture.previewPage&&selectionGesture.previewPage!==targetPage) clearTransferPreview(selectionGesture);
@@ -1560,6 +1725,10 @@ function attachDrawHandlers(p){
         return;
       }
       clearTransferPreview(gesture);
+      if(gesture.rotating&&!gesture.changed){
+        gesture.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,gesture.before[index]));
+        selectedAnnotation.frame=gesture.rotationFrame;
+      }
       if(gesture.changed){
         if(gesture.annotations.length===1){
           recordAnnotationHistory({type:'annotation-transform',page:p,annotation:gesture.annotation,before:gesture.before[0],after:cloneAnnotation(gesture.annotation)});
@@ -2054,11 +2223,13 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
     }else if(last.type==='annotation-transform'){
       restoreAnnotation(last.annotation,last.before);
+      if(selectedAnnotationList().includes(last.annotation)) selectedAnnotation.frame=null;
       saveAnnotations();
       redrawOverlay(last.page);
       redrawDraft(last.page,null);
     }else if(last.type==='annotation-transform-multiple'){
       last.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,last.before[index]));
+      if(selectedAnnotationList().some(annotation=>last.annotations.includes(annotation))) selectedAnnotation.frame=null;
       saveAnnotations();
       redrawOverlay(last.page);
       redrawDraft(last.page,null);
@@ -2130,11 +2301,13 @@ window.addEventListener('load', async ()=>{
       saveAnnotations();
     }else if(next.type==='annotation-transform'){
       restoreAnnotation(next.annotation,next.after||next.before);
+      if(selectedAnnotationList().includes(next.annotation)) selectedAnnotation.frame=null;
       saveAnnotations();
       redrawOverlay(next.page);
       redrawDraft(next.page,null);
     }else if(next.type==='annotation-transform-multiple'){
       next.annotations.forEach((annotation,index)=>restoreAnnotation(annotation,next.after?.[index]||next.before[index]));
+      if(selectedAnnotationList().some(annotation=>next.annotations.includes(annotation))) selectedAnnotation.frame=null;
       saveAnnotations();
       redrawOverlay(next.page);
       redrawDraft(next.page,null);
