@@ -122,6 +122,20 @@
   .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
   .annotationHistoryButton svg{width:20px;height:20px;display:block;stroke:currentColor}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
+  .annotationMenuActions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .backupPopup{top:148px;width:360px}
+  .backupPopup.dragging .annotationPopupHeader{cursor:var(--cursor-hand-closed)}
+  .backupBook{padding:10px 12px;border-radius:10px;background:#fff7df;border:1px solid #f2cf70;margin-bottom:12px}
+  .backupBookLabel{display:block;font-size:12px;color:#6b5a25;margin-bottom:2px}
+  .backupGuide{padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;color:#374151;font-size:12px;line-height:1.45}
+  .backupGuideTitle{display:block;color:#111;margin-bottom:6px}
+  .backupGuide p{margin:5px 0}
+  .backupGuide strong{color:#111}
+  .backupActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .backupAction{min-height:42px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .backupFileName{margin-top:10px;font-size:12px;color:#4b5563;overflow-wrap:anywhere}
+  .backupStatus{min-height:18px;margin-top:8px;font-size:12px;color:#166534}
+  .backupStatus.error{color:#b91c1c}
   .inlineTextEditorFrame{position:absolute;z-index:4;margin:0;padding:0;border:0;outline:3px dashed currentColor;outline-offset:0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;box-sizing:border-box}
   .inlineTextEditor{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;color:inherit;caret-color:currentColor;box-sizing:border-box}
   .inlineTextEditor::placeholder{color:currentColor;opacity:.48}
@@ -184,8 +198,9 @@
 
   <div class="section">
     <div class="row"><strong>Annotations</strong></div>
-    <div class="row">
-      <button id="openAnnotations" class="btn">Ouvrir les annotations</button>
+    <div class="annotationMenuActions">
+      <button id="openAnnotations" class="btn">Créer des annotations</button>
+      <button id="openAnnotationFiles" class="btn">Sauvegarder / ouvrir</button>
     </div>
   </div>
 
@@ -247,6 +262,29 @@
   </div>
 </div>
 
+<div id="annotationFilesPopup" class="annotationPopup backupPopup" role="dialog" aria-modal="false" aria-labelledby="annotationFilesPopupTitle">
+  <div class="annotationPopupHeader">
+    <div id="annotationFilesPopupTitle" class="annotationPopupTitle">Sauvegardes</div>
+    <button id="closeAnnotationFiles" class="btn annotationClose" title="Fermer" aria-label="Fermer">×</button>
+  </div>
+  <div class="backupBook">
+    <span class="backupBookLabel">Manuel affiché</span>
+    <strong>@LT_X – Formation numérique 1A</strong>
+  </div>
+  <div class="backupGuide">
+    <strong class="backupGuideTitle">Comment faire ?</strong>
+    <p><strong>Enregistrer :</strong> choisis le dossier et conserve le nom proposé. Tu pourras aussi le compléter avec le nom de la classe.</p>
+    <p><strong>Ouvrir :</strong> sélectionne le fichier correspondant à ta classe. Le travail actuellement affiché sera remplacé.</p>
+  </div>
+  <div class="backupActions">
+    <button id="exportAnnotations" class="btn btn-amber backupAction">Enregistrer</button>
+    <button id="importAnnotations" class="btn backupAction">Ouvrir</button>
+  </div>
+  <input id="importAnnotationsFile" type="file" accept=".json,application/json" hidden />
+  <div class="backupFileName">Nom proposé : <strong id="annotationExportName"></strong></div>
+  <div id="annotationFilesStatus" class="backupStatus" aria-live="polite"></div>
+</div>
+
 <div class="wrap"><div id="viewport" aria-live="polite" class="flow-1up"></div></div>
 
 <script>
@@ -254,6 +292,11 @@
 const DOCS_ROOT = "./docs";
 const CORRECTIONS_ROOT = "./corrections/monDoc";
 const LINKS_JSON_URL = "./links.json";
+const CURRENT_BOOK = Object.freeze({
+  id: "altx-1a",
+  title: "@LT_X – Formation numérique 1A",
+  fileLabel: "Alt-x_1A"
+});
 
 const fileName = n =>
   `Altx_1a_Corrections_version Numabib${n === 1 ? "" : n}.png`;
@@ -296,6 +339,15 @@ const $openAnnotations=document.getElementById('openAnnotations');
 const $annotationPopup=document.getElementById('annotationPopup');
 const $annotationPopupHeader=$annotationPopup.querySelector('.annotationPopupHeader');
 const $closeAnnotations=document.getElementById('closeAnnotations');
+const $openAnnotationFiles=document.getElementById('openAnnotationFiles');
+const $annotationFilesPopup=document.getElementById('annotationFilesPopup');
+const $annotationFilesPopupHeader=$annotationFilesPopup.querySelector('.annotationPopupHeader');
+const $closeAnnotationFiles=document.getElementById('closeAnnotationFiles');
+const $exportAnnotations=document.getElementById('exportAnnotations');
+const $importAnnotations=document.getElementById('importAnnotations');
+const $importAnnotationsFile=document.getElementById('importAnnotationsFile');
+const $annotationExportName=document.getElementById('annotationExportName');
+const $annotationFilesStatus=document.getElementById('annotationFilesStatus');
 const $annotationUndo=document.getElementById('annotationUndo');
 const $annotationRedo=document.getElementById('annotationRedo');
 const $annotationClearAll=document.getElementById('annotationClearAll');
@@ -377,6 +429,97 @@ function saveAnnotations(){
   }
   storedAnnotations=saved;
   try{ localStorage.setItem(ANNOTATIONS_STORAGE_KEY,JSON.stringify(saved)); }catch(_){}
+}
+
+function annotationExportDate(){
+  const now=new Date();
+  const local=new Date(now.getTime()-now.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,10);
+}
+function annotationExportFileName(){
+  return `Annotations_${CURRENT_BOOK.fileLabel}_${annotationExportDate()}.json`;
+}
+function setAnnotationFilesStatus(message,error=false){
+  $annotationFilesStatus.textContent=message||'';
+  $annotationFilesStatus.classList.toggle('error',!!error);
+}
+function buildAnnotationExport(){
+  if(pendingTextAnnotation) finishInlineTextEditor(true);
+  saveAnnotations();
+  return {
+    schemaVersion:1,
+    type:'fmttn-annotations',
+    bookId:CURRENT_BOOK.id,
+    bookTitle:CURRENT_BOOK.title,
+    exportedAt:new Date().toISOString(),
+    annotations:storedAnnotations
+  };
+}
+async function exportAnnotationsFile(){
+  const fileName=annotationExportFileName();
+  const blob=new Blob([JSON.stringify(buildAnnotationExport(),null,2)],{type:'application/json'});
+  try{
+    if(typeof window.showSaveFilePicker==='function'){
+      const handle=await window.showSaveFilePicker({
+        suggestedName:fileName,
+        types:[{description:'Sauvegarde FMttn',accept:{'application/json':['.json']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    }else{
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      link.href=url;
+      link.download=fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+    setAnnotationFilesStatus(`Fichier enregistré : ${fileName}`);
+  }catch(error){
+    if(error?.name==='AbortError') setAnnotationFilesStatus('Enregistrement annulé.');
+    else setAnnotationFilesStatus('Le fichier n’a pas pu être enregistré.',true);
+  }
+}
+function validateImportedAnnotations(data){
+  if(!data||typeof data!=='object'||Array.isArray(data)) throw new Error('Ce fichier n’est pas une sauvegarde valide.');
+  if(data.type!=='fmttn-annotations'||data.schemaVersion!==1) throw new Error('Ce format de sauvegarde n’est pas reconnu.');
+  if(data.bookId!==CURRENT_BOOK.id) throw new Error(`Ce fichier appartient à un autre manuel (${data.bookTitle||data.bookId||'inconnu'}).`);
+  if(!data.annotations||typeof data.annotations!=='object'||Array.isArray(data.annotations)) throw new Error('Le contenu de la sauvegarde est incomplet.');
+  for(const value of Object.values(data.annotations)){
+    if(!Array.isArray(value)) throw new Error('Le contenu de la sauvegarde est incorrect.');
+  }
+  return data.annotations;
+}
+async function importAnnotationsFile(file){
+  if(!file) return;
+  try{
+    if(file.size>20*1024*1024) throw new Error('Ce fichier est trop volumineux pour être une sauvegarde.');
+    const data=JSON.parse(await file.text());
+    const imported=validateImportedAnnotations(data);
+    const hasAnnotations=pages.some(page=>page.annotations?.length);
+    if(hasAnnotations&&!window.confirm('Ouvrir ce fichier remplacera le travail actuellement affiché. Continuer ?')){
+      setAnnotationFilesStatus('Ouverture annulée.');
+      return;
+    }
+    if(pendingTextAnnotation) finishInlineTextEditor(false);
+    clearSelectedAnnotation(false);
+    for(const page of pages){
+      const value=imported[String(page.idx)];
+      page.annotations=Array.isArray(value) ? JSON.parse(JSON.stringify(value)) : [];
+      redrawOverlay(page);
+      redrawDraft(page,null);
+    }
+    annotationHistoryStack.length=0;
+    annotationRedoStack.length=0;
+    saveAnnotations();
+    updateHistoryButtons();
+    setAnnotationFilesStatus(`Fichier ouvert : ${file.name}`);
+  }catch(error){
+    setAnnotationFilesStatus(error instanceof SyntaxError?'Ce fichier JSON est illisible.':(error.message||'Le fichier n’a pas pu être ouvert.'),true);
+  }
 }
 
 /*** ZOOM ***/
@@ -773,6 +916,7 @@ function placeAnnotationPopupInWindow(){
   $annotationPopup.style.right='auto';
 }
 function openAnnotationPopup(){
+  if($annotationFilesPopup.classList.contains('open')) closeAnnotationFilesPopup();
   $annotationPopup.classList.add('open');
   $openAnnotations.setAttribute('aria-expanded','true');
   annotationFontSize=DEFAULT_TEXT_FONT_PX;
@@ -786,6 +930,66 @@ function closeAnnotationPopup(){
   setAnnotationTool(null);
   $annotationPopup.classList.remove('open','dragging');
   $openAnnotations.setAttribute('aria-expanded','false');
+}
+function keepAnnotationFilesPopupInWindow(left,top){
+  const margin=8;
+  const width=$annotationFilesPopup.offsetWidth;
+  const height=$annotationFilesPopup.offsetHeight;
+  return {
+    left:clamp(left,margin,Math.max(margin,window.innerWidth-width-margin)),
+    top:clamp(top,margin,Math.max(margin,window.innerHeight-height-margin))
+  };
+}
+function placeAnnotationFilesPopupInWindow(){
+  if(!$annotationFilesPopup.classList.contains('open')) return;
+  const rect=$annotationFilesPopup.getBoundingClientRect();
+  const position=keepAnnotationFilesPopupInWindow(rect.left,rect.top);
+  $annotationFilesPopup.style.left=`${position.left}px`;
+  $annotationFilesPopup.style.top=`${position.top}px`;
+  $annotationFilesPopup.style.right='auto';
+}
+function openAnnotationFilesPopup(){
+  if($annotationPopup.classList.contains('open')) closeAnnotationPopup();
+  $annotationExportName.textContent=annotationExportFileName();
+  setAnnotationFilesStatus('');
+  $annotationFilesPopup.classList.add('open');
+  $openAnnotationFiles.setAttribute('aria-expanded','true');
+  requestAnimationFrame(placeAnnotationFilesPopupInWindow);
+}
+function closeAnnotationFilesPopup(){
+  $annotationFilesPopup.classList.remove('open','dragging');
+  $openAnnotationFiles.setAttribute('aria-expanded','false');
+  $importAnnotationsFile.value='';
+}
+function enableAnnotationFilesPopupDragging(){
+  let drag=null;
+  $annotationFilesPopupHeader.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button,input,select,textarea,a')) return;
+    if(e.pointerType==='mouse'&&e.button!==0) return;
+    const rect=$annotationFilesPopup.getBoundingClientRect();
+    $annotationFilesPopup.style.left=`${rect.left}px`;
+    $annotationFilesPopup.style.top=`${rect.top}px`;
+    $annotationFilesPopup.style.right='auto';
+    drag={pointerId:e.pointerId,offsetX:e.clientX-rect.left,offsetY:e.clientY-rect.top};
+    $annotationFilesPopup.classList.add('dragging');
+    try{$annotationFilesPopupHeader.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  });
+  $annotationFilesPopupHeader.addEventListener('pointermove',e=>{
+    if(!drag||drag.pointerId!==e.pointerId) return;
+    const position=keepAnnotationFilesPopupInWindow(e.clientX-drag.offsetX,e.clientY-drag.offsetY);
+    $annotationFilesPopup.style.left=`${position.left}px`;
+    $annotationFilesPopup.style.top=`${position.top}px`;
+  });
+  const endDrag=e=>{
+    if(!drag||drag.pointerId!==e.pointerId) return;
+    try{$annotationFilesPopupHeader.releasePointerCapture(e.pointerId);}catch(_){}
+    drag=null;
+    $annotationFilesPopup.classList.remove('dragging');
+  };
+  $annotationFilesPopupHeader.addEventListener('pointerup',endDrag);
+  $annotationFilesPopupHeader.addEventListener('pointercancel',endDrag);
+  window.addEventListener('resize',()=>requestAnimationFrame(placeAnnotationFilesPopupInWindow));
 }
 function enableAnnotationPopupDragging(){
   let drag=null;
@@ -2082,6 +2286,7 @@ window.addEventListener('load', async ()=>{
     if(e.key==='Escape'){
       if(pendingTextAnnotation){ finishInlineTextEditor(false); return; }
       if($annotationPopup.classList.contains('open')){ closeAnnotationPopup(); return; }
+      if($annotationFilesPopup.classList.contains('open')){ closeAnnotationFilesPopup(); return; }
     }
     if(e.target.matches('input,textarea,select')) return;
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'){
@@ -2132,9 +2337,19 @@ window.addEventListener('load', async ()=>{
   });
 
   enableAnnotationPopupDragging();
+  enableAnnotationFilesPopupDragging();
   $openAnnotations.setAttribute('aria-expanded','false');
+  $openAnnotationFiles.setAttribute('aria-expanded','false');
   $openAnnotations.addEventListener('click',openAnnotationPopup);
   $closeAnnotations.addEventListener('click',closeAnnotationPopup);
+  $openAnnotationFiles.addEventListener('click',openAnnotationFilesPopup);
+  $closeAnnotationFiles.addEventListener('click',closeAnnotationFilesPopup);
+  $exportAnnotations.addEventListener('click',exportAnnotationsFile);
+  $importAnnotations.addEventListener('click',()=>{
+    $importAnnotationsFile.value='';
+    $importAnnotationsFile.click();
+  });
+  $importAnnotationsFile.addEventListener('change',()=>importAnnotationsFile($importAnnotationsFile.files?.[0]));
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
