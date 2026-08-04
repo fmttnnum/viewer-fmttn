@@ -269,19 +269,18 @@
   </div>
   <div class="backupBook">
     <span class="backupBookLabel">Manuel affiché</span>
-    <strong>@LT_X – Formation numérique 1A</strong>
+    <strong>@LT_X – Formation numérique 1a</strong>
   </div>
   <div class="backupGuide">
     <strong class="backupGuideTitle">Comment faire ?</strong>
-    <p><strong>Enregistrer :</strong> choisis le dossier et conserve le nom proposé. Tu pourras aussi le compléter avec le nom de la classe.</p>
-    <p><strong>Ouvrir :</strong> sélectionne le fichier correspondant à ta classe. Le travail actuellement affiché sera remplacé.</p>
+    <p><strong>Enregistrer :</strong> sauvegarde tes annotations dans le dossier de ton choix. Tu peux ainsi les ranger par classe, par exemple.</p>
+    <p><strong>Ouvrir :</strong> retrouve tes annotations sauvegardées en sélectionnant le fichier correspondant. Les annotations actuellement affichées seront remplacées.</p>
   </div>
   <div class="backupActions">
     <button id="exportAnnotations" class="btn btn-amber backupAction">Enregistrer</button>
     <button id="importAnnotations" class="btn backupAction">Ouvrir</button>
   </div>
   <input id="importAnnotationsFile" type="file" accept=".json,application/json" hidden />
-  <div class="backupFileName">Nom proposé : <strong id="annotationExportName"></strong></div>
   <div id="annotationFilesStatus" class="backupStatus" aria-live="polite"></div>
 </div>
 
@@ -294,8 +293,8 @@ const CORRECTIONS_ROOT = "./corrections/monDoc";
 const LINKS_JSON_URL = "./links.json";
 const CURRENT_BOOK = Object.freeze({
   id: "altx-1a",
-  title: "@LT_X – Formation numérique 1A",
-  fileLabel: "Alt-x_1A"
+  title: "@LT_X – Formation numérique 1a",
+  fileLabel: "Alt-x_1a"
 });
 
 const fileName = n =>
@@ -346,7 +345,6 @@ const $closeAnnotationFiles=document.getElementById('closeAnnotationFiles');
 const $exportAnnotations=document.getElementById('exportAnnotations');
 const $importAnnotations=document.getElementById('importAnnotations');
 const $importAnnotationsFile=document.getElementById('importAnnotationsFile');
-const $annotationExportName=document.getElementById('annotationExportName');
 const $annotationFilesStatus=document.getElementById('annotationFilesStatus');
 const $annotationUndo=document.getElementById('annotationUndo');
 const $annotationRedo=document.getElementById('annotationRedo');
@@ -893,7 +891,6 @@ function setAnnotationTool(tool){
     button.classList.toggle('selected',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
-  $openAnnotations.classList.toggle('btn-amber',!!annotationTool);
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
 }
@@ -918,7 +915,9 @@ function placeAnnotationPopupInWindow(){
 function openAnnotationPopup(){
   if($annotationFilesPopup.classList.contains('open')) closeAnnotationFilesPopup();
   $annotationPopup.classList.add('open');
+  $openAnnotations.classList.add('btn-view-active');
   $openAnnotations.setAttribute('aria-expanded','true');
+  $openAnnotations.setAttribute('aria-pressed','true');
   annotationFontSize=DEFAULT_TEXT_FONT_PX;
   $annotationFontSize.value=String(DEFAULT_TEXT_FONT_PX);
   if(!annotationTool) setAnnotationTool('select');
@@ -929,7 +928,9 @@ function closeAnnotationPopup(){
   if(pendingTextAnnotation) finishInlineTextEditor(true);
   setAnnotationTool(null);
   $annotationPopup.classList.remove('open','dragging');
+  $openAnnotations.classList.remove('btn-view-active');
   $openAnnotations.setAttribute('aria-expanded','false');
+  $openAnnotations.setAttribute('aria-pressed','false');
 }
 function keepAnnotationFilesPopupInWindow(left,top){
   const margin=8;
@@ -950,15 +951,18 @@ function placeAnnotationFilesPopupInWindow(){
 }
 function openAnnotationFilesPopup(){
   if($annotationPopup.classList.contains('open')) closeAnnotationPopup();
-  $annotationExportName.textContent=annotationExportFileName();
   setAnnotationFilesStatus('');
   $annotationFilesPopup.classList.add('open');
+  $openAnnotationFiles.classList.add('btn-view-active');
   $openAnnotationFiles.setAttribute('aria-expanded','true');
+  $openAnnotationFiles.setAttribute('aria-pressed','true');
   requestAnimationFrame(placeAnnotationFilesPopupInWindow);
 }
 function closeAnnotationFilesPopup(){
   $annotationFilesPopup.classList.remove('open','dragging');
+  $openAnnotationFiles.classList.remove('btn-view-active');
   $openAnnotationFiles.setAttribute('aria-expanded','false');
+  $openAnnotationFiles.setAttribute('aria-pressed','false');
   $importAnnotationsFile.value='';
 }
 function enableAnnotationFilesPopupDragging(){
@@ -2339,7 +2343,9 @@ window.addEventListener('load', async ()=>{
   enableAnnotationPopupDragging();
   enableAnnotationFilesPopupDragging();
   $openAnnotations.setAttribute('aria-expanded','false');
+  $openAnnotations.setAttribute('aria-pressed','false');
   $openAnnotationFiles.setAttribute('aria-expanded','false');
+  $openAnnotationFiles.setAttribute('aria-pressed','false');
   $openAnnotations.addEventListener('click',openAnnotationPopup);
   $closeAnnotations.addEventListener('click',closeAnnotationPopup);
   $openAnnotationFiles.addEventListener('click',openAnnotationFilesPopup);
