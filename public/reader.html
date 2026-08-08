@@ -329,14 +329,12 @@ const ROTATION_SNAP_TOLERANCE_DEG = 8;
 const ROTATION_SNAP_ANGLES_DEG = [0,90,180,270];
 const INITIAL_EAGER_DOCUMENTS = 1;
 const BACKGROUND_DOCUMENT_DELAY_MS = 1200;
-const BACKGROUND_CORRECTION_DELAY_MS = 8000;
-const CORRECTION_PRELOAD_WORKERS = 1;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
-let corrReadyCount = 0, revealReady = false;
+let corrReadyCount = 0, revealReady = true;
 let documentObserver=null, progressiveLoadingStarted=false;
 const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
 
@@ -718,7 +716,7 @@ function gotoIndex(target){
   currentIndex=target;
   const targetPage=pages[target];
   requestDocument(targetPage,'high');
-  ensureCorrectionLoaded(targetPage,'high');
+  if(drawMode || pages[0]?.showAll) ensureVisibleCorrections('high');
   syncPageUI();
   cards[target].scrollIntoView({behavior:'auto',block:'start'});
 
@@ -756,6 +754,7 @@ function updateNavFromScroll(){
   }
 
   currentIndex=best.idx; syncPageUI();
+  if(drawMode || pages[0]?.showAll) ensureVisibleCorrections('high');
 }
 let lastNavScrollY=window.scrollY, navScrollFrame=0;
 function scheduleNavFromScroll(){
@@ -879,7 +878,7 @@ function toggleLinks(on){
 function toggleDrawMode(on){
   drawMode = on;
   if(drawMode){
-    ensureCorrectionLoaded(pages[currentIndex],'high');
+    ensureVisibleCorrections('high');
     setAnnotationTool(null);
     linksVisible=false;
     linkDrawMode=false;
@@ -2055,7 +2054,11 @@ function attachDrawHandlers(p){
     draft=null;
     if(r.w>6 && r.h>6){
       if(linkDrawMode) addEncodedLink(p,r);
-      else { p.zones.push(r); recordCorrectionHistory({page:p,rect:r,index:p.zones.length-1}); redrawOverlay(p); }
+      else {
+        p.zones.push(r);
+        recordCorrectionHistory({page:p,rect:r,index:p.zones.length-1});
+        ensureCorrectionLoaded(p,'high').then(()=>redrawOverlay(p));
+      }
     }
     redrawDraft(p,null);
   }
@@ -2091,9 +2094,9 @@ function attachDrawHandlers(p){
 
 /*** PRÉCHARGEMENT : corrections ***/
 function updateRevealButton(){
-  const pct=Math.round((corrReadyCount/pages.length)*100);
-  if(corrReadyCount>=pages.length && pages.length>0){ revealReady=true; $revealAll.disabled=false; $revealAll.textContent='Tout révéler'; }
-  else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${isFinite(pct)?pct:0}%`; }
+  revealReady=pages.length>0;
+  $revealAll.disabled=!revealReady;
+  if(!revealReady) $revealAll.textContent='Tout révéler';
 }
 
 function requestDocument(p,priority='auto'){
@@ -2137,11 +2140,10 @@ function ensureCorrectionLoaded(p,priority='auto'){
   return p.corrLoadPromise;
 }
 
-function waitForBrowserIdle(timeout=1200){
-  return new Promise(resolve=>{
-    if('requestIdleCallback' in window) requestIdleCallback(()=>resolve(),{timeout});
-    else setTimeout(resolve,120);
-  });
+function ensureVisibleCorrections(priority='high'){
+  const indices=visiblePageIndices();
+  const targets=indices.length ? indices : [currentIndex];
+  return Promise.all(targets.map(index=>ensureCorrectionLoaded(pages[index],priority)));
 }
 
 function startProgressiveLoading(){
@@ -2168,17 +2170,8 @@ function startProgressiveLoading(){
     }
   },BACKGROUND_DOCUMENT_DELAY_MS);
 
-  let nextCorrection=0;
-  const worker=async()=>{
-    while(nextCorrection<pages.length){
-      const index=nextCorrection++;
-      if(index>0) await waitForBrowserIdle();
-      await ensureCorrectionLoaded(pages[index],index===0?'high':'low');
-    }
-  };
-  setTimeout(()=>{
-    for(let i=0;i<Math.min(CORRECTION_PRELOAD_WORKERS,pages.length);i++) worker();
-  },BACKGROUND_CORRECTION_DELAY_MS);
+  // Les corrections sont chargées à la demande pour la page visible. Cela
+  // évite de télécharger les 164 images corrigées avant de pouvoir travailler.
 }
 
 /*** BUILD ***/
@@ -2710,7 +2703,13 @@ window.addEventListener('load', async ()=>{
     updateHistoryButtons();
   }
 
-  document.getElementById('revealAll').addEventListener('click',()=>{ if(!revealReady) return; const reveal=!pages[0]?.showAll; for(const p of pages){ p.showAll=reveal; redrawOverlay(p); } document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler'; });
+  document.getElementById('revealAll').addEventListener('click',()=>{
+    if(!revealReady) return;
+    const reveal=!pages[0]?.showAll;
+    for(const p of pages){ p.showAll=reveal; redrawOverlay(p); }
+    if(reveal) ensureVisibleCorrections('high');
+    document.getElementById('revealAll').textContent=reveal?'Masquer tout':'Tout révéler';
+  });
 
   $viewport.addEventListener('contextmenu',e=>e.preventDefault());
 });
