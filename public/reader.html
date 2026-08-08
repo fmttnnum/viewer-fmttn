@@ -685,6 +685,18 @@ function displayedPageNumbers(){
     .map(displayNumberFromIndex)
     .filter(number=>number!=='');
 }
+function activePageIndices(){
+  const currentCard=cardsReal()[currentIndex];
+  if(!currentCard) return pages[currentIndex] ? [currentIndex] : [];
+
+  const activeCards=layout==='2up'
+    ? [...(currentCard.closest('.spread')?.querySelectorAll('.page:not(.spacer)')||[currentCard])]
+    : [currentCard];
+
+  return activeCards
+    .map(card=>pages.findIndex(page=>page.elPage===card))
+    .filter(index=>index>=0);
+}
 function syncPageUI(){
   const numbers=displayedPageNumbers();
   $pageJump.dataset.displayedNumbers=JSON.stringify(numbers);
@@ -716,9 +728,11 @@ function gotoIndex(target){
   currentIndex=target;
   const targetPage=pages[target];
   requestDocument(targetPage,'high');
-  if(drawMode || pages[0]?.showAll) ensureVisibleCorrections('high');
   syncPageUI();
   cards[target].scrollIntoView({behavior:'auto',block:'start'});
+  // La navigation reste prioritaire : le chargement de la correction ne doit
+  // jamais empêcher le saut vers la page demandée.
+  if(drawMode || pages[0]?.showAll) void ensureVisibleCorrections('high');
 
   // Si l'image visée termine son chargement juste après le saut, on recale
   // une fois la page. Cela évite qu'elle soit repoussée par les images qui
@@ -2096,7 +2110,7 @@ function attachDrawHandlers(p){
 function updateRevealButton(){
   revealReady=pages.length>0;
   $revealAll.disabled=!revealReady;
-  if(!revealReady) $revealAll.textContent='Tout révéler';
+  $revealAll.textContent=pages[0]?.showAll?'Masquer tout':'Tout révéler';
 }
 
 function requestDocument(p,priority='auto'){
@@ -2124,6 +2138,10 @@ function ensureCorrectionLoaded(p,priority='auto'){
         p.imgCorr=corr;
         p.corrNW=corr.naturalWidth||0;
         p.corrNH=corr.naturalHeight||0;
+      }else{
+        // Autorise une nouvelle tentative si le réseau a interrompu le
+        // premier chargement de cette correction.
+        p.corrLoadPromise=null;
       }
       corrReadyCount++;
       updateRevealButton();
@@ -2141,7 +2159,7 @@ function ensureCorrectionLoaded(p,priority='auto'){
 }
 
 function ensureVisibleCorrections(priority='high'){
-  const indices=visiblePageIndices();
+  const indices=activePageIndices();
   const targets=indices.length ? indices : [currentIndex];
   return Promise.all(targets.map(index=>ensureCorrectionLoaded(pages[index],priority)));
 }
