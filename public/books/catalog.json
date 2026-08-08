@@ -1,0 +1,15 @@
+{
+  "defaultBook": "altx-1a",
+  "books": {
+    "altx-1a": {
+      "title": "@LT_X – Formation numérique 1a",
+      "fileLabel": "Alt-x_1a",
+      "linksUrl": "./links.json"
+    },
+    "altx-1b": {
+      "title": "@LT_X – Formation numérique 1b",
+      "fileLabel": "Alt-x_1b",
+      "linksUrl": "./books/altx-1b/links.json"
+    }
+  }
+}

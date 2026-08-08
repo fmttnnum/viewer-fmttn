@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "catalog": "node tools/generate-books-catalog.mjs",
+    "predev": "npm run catalog",
     "dev": "cross-env NEXT_DISABLE_TURBOPACK=1 next dev",
+    "prebuild": "npm run catalog",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

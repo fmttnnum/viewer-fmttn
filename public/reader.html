@@ -122,6 +122,9 @@
   .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
   .annotationHistoryButton svg{width:20px;height:20px;display:block;stroke:currentColor}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
+  .emptyBookMessage{min-height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center;color:#374151}
+  .emptyBookMessage strong{font-size:24px;color:#111827}
+  .emptyBookMessage span{font-size:16px}
   .annotationMenuActions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
   .backupPopup{top:148px;width:360px}
   .backupPopup.dragging .annotationPopupHeader{cursor:var(--cursor-hand-closed)}
@@ -270,7 +273,7 @@
   </div>
   <div class="backupBook">
     <span class="backupBookLabel">Manuel affiché</span>
-    <strong>@LT_X – Formation numérique 1a</strong>
+    <strong id="backupBookTitle">@LT_X – Formation numérique 1a</strong>
   </div>
   <div class="backupGuide">
     <strong class="backupGuideTitle">Comment faire ?</strong>
@@ -289,20 +292,26 @@
 
 <script>
 /*** PARAMS ***/
-const DOCS_ROOT = "./docs";
-const CORRECTIONS_ROOT = "./corrections/monDoc";
-const LINKS_JSON_URL = "./links.json";
-const CURRENT_BOOK = Object.freeze({
+const BOOKS_CATALOG_URL = "./books/catalog.generated.json";
+const DEFAULT_BOOK_ID = "altx-1a";
+const REQUESTED_BOOK_ID = new URLSearchParams(location.search).get("book") || DEFAULT_BOOK_ID;
+let CURRENT_BOOK = Object.freeze({
   id: "altx-1a",
   title: "@LT_X – Formation numérique 1a",
-  fileLabel: "Alt-x_1a"
+  fileLabel: "Alt-x_1a",
+  basePath: "./books/altx-1a",
+  linksUrl: "./links.json",
+  pages: Array.from({length:164},(_,index)=>{
+    const n=index+1;
+    const name=`Altx_1a_Corrections_version Numabib${n === 1 ? "" : n}.png`;
+    return {document:name,correction:name};
+  })
 });
+let LINKS_JSON_URL = CURRENT_BOOK.linksUrl;
 
-const fileName = n =>
-  `Altx_1a_Corrections_version Numabib${n === 1 ? "" : n}.png`;
-
-const docPath = n => `${DOCS_ROOT}/${fileName(n)}`;
-const corrPath = n => `${CORRECTIONS_ROOT}/${fileName(n)}`;
+const encodedFileName = name => String(name||'').split('/').map(encodeURIComponent).join('/');
+const docPath = n => `${CURRENT_BOOK.basePath}/sans-correction/${encodedFileName(CURRENT_BOOK.pages[n-1]?.document)}`;
+const corrPath = n => `${CURRENT_BOOK.basePath}/corrections/${encodedFileName(CURRENT_BOOK.pages[n-1]?.correction)}`;
 
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
@@ -310,8 +319,10 @@ const FRONT_MATTER_PAGES = 2;
 const TABLE_OF_CONTENTS_PAGE = 6;
 const HIGHLIGHT_OPACITY = 0.36;
 const HIGHLIGHT_WIDTH_PX = 54;
-const HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
-const ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
+const LEGACY_HIGHLIGHTS_STORAGE_KEY = `fmttn-highlights-v1:${location.pathname}`;
+const LEGACY_ANNOTATIONS_STORAGE_KEY = `fmttn-annotations-v2:${location.pathname}`;
+let HIGHLIGHTS_STORAGE_KEY = `${LEGACY_HIGHLIGHTS_STORAGE_KEY}:${CURRENT_BOOK.id}`;
+let ANNOTATIONS_STORAGE_KEY = `${LEGACY_ANNOTATIONS_STORAGE_KEY}:${CURRENT_BOOK.id}`;
 const DRAW_WIDTH_PX = 7;
 const DEFAULT_TEXT_FONT_PX = 67;
 const ROTATION_SNAP_TOLERANCE_DEG = 8;
@@ -347,6 +358,7 @@ const $exportAnnotations=document.getElementById('exportAnnotations');
 const $importAnnotations=document.getElementById('importAnnotations');
 const $importAnnotationsFile=document.getElementById('importAnnotationsFile');
 const $annotationFilesStatus=document.getElementById('annotationFilesStatus');
+const $backupBookTitle=document.getElementById('backupBookTitle');
 const $annotationUndo=document.getElementById('annotationUndo');
 const $annotationRedo=document.getElementById('annotationRedo');
 const $annotationClearAll=document.getElementById('annotationClearAll');
@@ -371,7 +383,7 @@ const correctionHistoryStack=[];
 const annotationHistoryStack=[];
 const annotationRedoStack=[];
 let selectedLink=null;
-let storedAnnotations=loadStoredAnnotations();
+let storedAnnotations={};
 let pendingTextAnnotation=null;
 let selectedAnnotation=null;
 let annotationFontEditBefore=null;
@@ -411,9 +423,18 @@ function loadStoredAnnotations(){
   try{
     const parsed=JSON.parse(localStorage.getItem(ANNOTATIONS_STORAGE_KEY)||'null');
     if(parsed && typeof parsed==='object') return parsed;
-  }catch(_){ return {}; }
+  }catch(_){}
+  if(CURRENT_BOOK.id==='altx-1a'){
+    try{
+      const legacy=JSON.parse(localStorage.getItem(LEGACY_ANNOTATIONS_STORAGE_KEY)||'null');
+      if(legacy && typeof legacy==='object') return legacy;
+    }catch(_){}
+  }
   try{
-    const old=JSON.parse(localStorage.getItem(HIGHLIGHTS_STORAGE_KEY)||'{}');
+    const highlightKey=CURRENT_BOOK.id==='altx-1a'&&localStorage.getItem(LEGACY_HIGHLIGHTS_STORAGE_KEY)
+      ? LEGACY_HIGHLIGHTS_STORAGE_KEY
+      : HIGHLIGHTS_STORAGE_KEY;
+    const old=JSON.parse(localStorage.getItem(highlightKey)||'{}');
     const migrated={};
     for(const [page,lines] of Object.entries(old||{})){
       if(Array.isArray(lines)) migrated[page]=lines.map(line=>({kind:'highlight',x1:line.x1,x2:line.x2,y:line.y,width:line.width||HIGHLIGHT_WIDTH_PX,color:'#ffe100'}));
@@ -2204,20 +2225,40 @@ async function discoverPages(max=500){
   return list;
 }
 async function getPagesList(){
-  // manifest.json prioritaire s’il existe
+  return CURRENT_BOOK.pages.map((_,index)=>index+1);
+}
+
+async function loadCurrentBook(){
   try{
-    const res=await fetch('./manifest.json?v='+Date.now(),{cache:'no-store'});
-    if(res.ok){
-      const m=await res.json();
-      if(m && Array.isArray(m.pages) && m.pages.length) return m.pages;
-    }
-  }catch(_){}
-  // sinon découverte auto
-  return await discoverPages(500);
+    const response=await fetch(`${BOOKS_CATALOG_URL}?v=${Date.now()}`,{cache:'no-store'});
+    if(!response.ok) throw new Error(`Catalogue indisponible (${response.status})`);
+    const catalog=await response.json();
+    const defaultId=catalog.defaultBook||DEFAULT_BOOK_ID;
+    const selected=catalog.books?.find(book=>book.id===REQUESTED_BOOK_ID)
+      || catalog.books?.find(book=>book.id===defaultId);
+    if(!selected||!Array.isArray(selected.pages)) throw new Error('Catalogue invalide');
+    CURRENT_BOOK=Object.freeze(selected);
+  }catch(error){
+    console.warn('Utilisation de la configuration intégrée du 1a :',error);
+  }
+
+  LINKS_JSON_URL=CURRENT_BOOK.linksUrl||`${CURRENT_BOOK.basePath}/links.json`;
+  HIGHLIGHTS_STORAGE_KEY=`${LEGACY_HIGHLIGHTS_STORAGE_KEY}:${CURRENT_BOOK.id}`;
+  ANNOTATIONS_STORAGE_KEY=`${LEGACY_ANNOTATIONS_STORAGE_KEY}:${CURRENT_BOOK.id}`;
+  storedAnnotations=loadStoredAnnotations();
+  $backupBookTitle.textContent=CURRENT_BOOK.title;
+  document.title=`${CURRENT_BOOK.title} – Liseuse`;
+
+  const url=new URL(location.href);
+  if(url.searchParams.get('book')!==CURRENT_BOOK.id){
+    url.searchParams.set('book',CURRENT_BOOK.id);
+    history.replaceState(null,'',url);
+  }
 }
 
 /*** INIT ***/
 window.addEventListener('load', async ()=>{
+  await loadCurrentBook();
   let collapsed=false; const setCollapsed=c=>{
     collapsed=c;
     $side.classList.toggle('collapsed',c);
@@ -2229,6 +2270,16 @@ window.addEventListener('load', async ()=>{
   window.addEventListener('resize',()=>{ refreshFitWidthPct(); updatePanState(); },{passive:true});
 
   const pagesList = await getPagesList();
+  if(!pagesList.length){
+    const message=document.createElement('div');
+    const title=document.createElement('strong');
+    const explanation=document.createElement('span');
+    message.className='emptyBookMessage';
+    title.textContent=CURRENT_BOOK.title;
+    explanation.textContent='Les fichiers PNG de ce manuel ne sont pas encore disponibles.';
+    message.append(title,explanation);
+    $viewport.appendChild(message);
+  }
   for(const n of pagesList) $viewport.appendChild(makePage(n));
   updateRevealButton();
   rebuild();
