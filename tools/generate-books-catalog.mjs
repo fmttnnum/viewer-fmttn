@@ -20,6 +20,19 @@ async function pngFiles(directory) {
     .sort(naturalSort);
 }
 
+async function webpFiles(directory) {
+  try {
+    const entries = await readdir(directory, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".webp"))
+      .map((entry) => entry.name)
+      .sort(naturalSort);
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 function fallbackTitle(id) {
   return id
     .split("-")
@@ -40,10 +53,23 @@ for (const id of bookIds) {
   const baseDirectory = path.join(booksRoot, id);
   const documents = await pngFiles(path.join(baseDirectory, "sans-correction"));
   const corrections = await pngFiles(path.join(baseDirectory, "corrections"));
+  const optimizedDocuments = await webpFiles(path.join(baseDirectory, "optimized", "sans-correction"));
+  const optimizedCorrections = await webpFiles(path.join(baseDirectory, "optimized", "corrections"));
 
   if (documents.length !== corrections.length) {
     throw new Error(
       `${id} contient ${documents.length} page(s) sans correction et ${corrections.length} page(s) corrigée(s). Les deux dossiers doivent contenir le même nombre de PNG.`
+    );
+  }
+
+  if (optimizedDocuments.length && optimizedDocuments.length !== documents.length) {
+    throw new Error(
+      `${id} contient ${optimizedDocuments.length} page(s) WebP optimisée(s) pour ${documents.length} PNG. Le dossier optimisé doit être complet.`
+    );
+  }
+  if (optimizedCorrections.length && optimizedCorrections.length !== corrections.length) {
+    throw new Error(
+      `${id} contient ${optimizedCorrections.length} correction(s) WebP optimisée(s) pour ${corrections.length} PNG. Le dossier optimisé doit être complet.`
     );
   }
 
@@ -53,10 +79,16 @@ for (const id of bookIds) {
     title: metadata.title || fallbackTitle(id),
     fileLabel: metadata.fileLabel || id,
     basePath: `./books/${id}`,
+    documentBasePath: optimizedDocuments.length
+      ? `./books/${id}/optimized/sans-correction`
+      : `./books/${id}/sans-correction`,
+    correctionBasePath: optimizedCorrections.length
+      ? `./books/${id}/optimized/corrections`
+      : `./books/${id}/corrections`,
     linksUrl: metadata.linksUrl || `./books/${id}/links.json`,
     pages: documents.map((document, index) => ({
-      document,
-      correction: corrections[index]
+      document: optimizedDocuments[index] || document,
+      correction: optimizedCorrections[index] || corrections[index]
     }))
   });
 }

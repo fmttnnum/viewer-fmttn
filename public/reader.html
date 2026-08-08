@@ -310,8 +310,8 @@ let CURRENT_BOOK = Object.freeze({
 let LINKS_JSON_URL = CURRENT_BOOK.linksUrl;
 
 const encodedFileName = name => String(name||'').split('/').map(encodeURIComponent).join('/');
-const docPath = n => `${CURRENT_BOOK.basePath}/sans-correction/${encodedFileName(CURRENT_BOOK.pages[n-1]?.document)}`;
-const corrPath = n => `${CURRENT_BOOK.basePath}/corrections/${encodedFileName(CURRENT_BOOK.pages[n-1]?.correction)}`;
+const docPath = n => `${CURRENT_BOOK.documentBasePath||`${CURRENT_BOOK.basePath}/sans-correction`}/${encodedFileName(CURRENT_BOOK.pages[n-1]?.document)}`;
+const corrPath = n => `${CURRENT_BOOK.correctionBasePath||`${CURRENT_BOOK.basePath}/corrections`}/${encodedFileName(CURRENT_BOOK.pages[n-1]?.correction)}`;
 
 const REF_WIDTH_PX = Math.round(1240 * 0.35 * 2);
 const MIN_PCT = 30, MAX_PCT = 200;
@@ -327,8 +327,10 @@ const DRAW_WIDTH_PX = 7;
 const DEFAULT_TEXT_FONT_PX = 67;
 const ROTATION_SNAP_TOLERANCE_DEG = 8;
 const ROTATION_SNAP_ANGLES_DEG = [0,90,180,270];
-const INITIAL_EAGER_DOCUMENTS = 2;
-const CORRECTION_PRELOAD_WORKERS = 2;
+const INITIAL_EAGER_DOCUMENTS = 1;
+const BACKGROUND_DOCUMENT_DELAY_MS = 1200;
+const BACKGROUND_CORRECTION_DELAY_MS = 8000;
+const CORRECTION_PRELOAD_WORKERS = 1;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
@@ -2146,19 +2148,25 @@ function startProgressiveLoading(){
   if(progressiveLoadingStarted) return;
   progressiveLoadingStarted=true;
 
-  if('IntersectionObserver' in window){
-    documentObserver=new IntersectionObserver(entries=>{
-      for(const entry of entries){
-        if(!entry.isIntersecting) continue;
-        const p=pages.find(page=>page.elPage===entry.target);
-        requestDocument(p,'auto');
-        documentObserver.unobserve(entry.target);
-      }
-    },{rootMargin:'1400px 0px'});
-    for(const p of pages) if(!p.docRequested) documentObserver.observe(p.elPage);
-  }else{
-    for(const p of pages) requestDocument(p,'auto');
-  }
+  // Laisse d'abord le navigateur afficher la couverture sans concurrence.
+  // La page suivante arrive juste après, puis seules les pages proches de la
+  // zone visible sont demandées.
+  setTimeout(()=>{
+    requestDocument(pages[1],'high');
+    if('IntersectionObserver' in window){
+      documentObserver=new IntersectionObserver(entries=>{
+        for(const entry of entries){
+          if(!entry.isIntersecting) continue;
+          const p=pages.find(page=>page.elPage===entry.target);
+          requestDocument(p,'auto');
+          documentObserver.unobserve(entry.target);
+        }
+      },{rootMargin:'500px 0px'});
+      for(const p of pages) if(!p.docRequested) documentObserver.observe(p.elPage);
+    }else{
+      for(const p of pages.slice(1)) requestDocument(p,'low');
+    }
+  },BACKGROUND_DOCUMENT_DELAY_MS);
 
   let nextCorrection=0;
   const worker=async()=>{
@@ -2170,7 +2178,7 @@ function startProgressiveLoading(){
   };
   setTimeout(()=>{
     for(let i=0;i<Math.min(CORRECTION_PRELOAD_WORKERS,pages.length);i++) worker();
-  },500);
+  },BACKGROUND_CORRECTION_DELAY_MS);
 }
 
 /*** BUILD ***/
@@ -2311,7 +2319,7 @@ async function getPagesList(){
 
 async function loadCurrentBook(){
   try{
-    const response=await fetch(`${BOOKS_CATALOG_URL}?v=${Date.now()}`,{cache:'no-store'});
+    const response=await fetch(BOOKS_CATALOG_URL,{cache:'default'});
     if(!response.ok) throw new Error(`Catalogue indisponible (${response.status})`);
     const catalog=await response.json();
     const defaultId=catalog.defaultBook||DEFAULT_BOOK_ID;
