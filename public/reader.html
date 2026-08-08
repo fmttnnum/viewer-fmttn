@@ -327,12 +327,15 @@ const DRAW_WIDTH_PX = 7;
 const DEFAULT_TEXT_FONT_PX = 67;
 const ROTATION_SNAP_TOLERANCE_DEG = 8;
 const ROTATION_SNAP_ANGLES_DEG = [0,90,180,270];
+const INITIAL_EAGER_DOCUMENTS = 2;
+const CORRECTION_PRELOAD_WORKERS = 2;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = false;
+let documentObserver=null, progressiveLoadingStarted=false;
 const LINK_EDITOR = new URLSearchParams(location.search).get('editLinks') === '1';
 
 const $viewport=document.getElementById('viewport');
@@ -711,13 +714,15 @@ function goToEnteredPage(){
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
   currentIndex=target;
+  const targetPage=pages[target];
+  requestDocument(targetPage,'high');
+  ensureCorrectionLoaded(targetPage,'high');
   syncPageUI();
   cards[target].scrollIntoView({behavior:'auto',block:'start'});
 
   // Si l'image visée termine son chargement juste après le saut, on recale
   // une fois la page. Cela évite qu'elle soit repoussée par les images qui
   // prennent leur hauteur définitive au même moment.
-  const targetPage=pages[target];
   if(targetPage && !targetPage.imgDoc.complete){
     targetPage.imgDoc.addEventListener('load',()=>{
       requestAnimationFrame(()=>{
@@ -872,6 +877,7 @@ function toggleLinks(on){
 function toggleDrawMode(on){
   drawMode = on;
   if(drawMode){
+    ensureCorrectionLoaded(pages[currentIndex],'high');
     setAnnotationTool(null);
     linksVisible=false;
     linkDrawMode=false;
@@ -2088,6 +2094,85 @@ function updateRevealButton(){
   else { $revealAll.disabled=true; $revealAll.textContent=`Préchargement… ${isFinite(pct)?pct:0}%`; }
 }
 
+function requestDocument(p,priority='auto'){
+  if(!p||p.docRequested) return;
+  p.docRequested=true;
+  p.imgDoc.loading=priority==='high'?'eager':'lazy';
+  p.imgDoc.fetchPriority=priority;
+  p.imgDoc.src=p.docUrl;
+}
+
+function ensureCorrectionLoaded(p,priority='auto'){
+  if(!p) return Promise.resolve(false);
+  if(p.imgCorr) return Promise.resolve(true);
+  if(p.corrLoadPromise) return p.corrLoadPromise;
+
+  p.corrLoadPromise=new Promise(resolve=>{
+    const corr=new Image();
+    corr.decoding='async';
+    corr.fetchPriority=priority;
+    let settled=false;
+    const finish=ok=>{
+      if(settled) return;
+      settled=true;
+      if(ok){
+        p.imgCorr=corr;
+        p.corrNW=corr.naturalWidth||0;
+        p.corrNH=corr.naturalHeight||0;
+      }
+      corrReadyCount++;
+      updateRevealButton();
+      redrawOverlay(p);
+      resolve(ok);
+    };
+    corr.addEventListener('load',async()=>{
+      try{ if(typeof corr.decode==='function') await corr.decode(); }catch(_){ }
+      finish(true);
+    },{once:true});
+    corr.addEventListener('error',()=>finish(false),{once:true});
+    corr.src=p.corrUrl;
+  });
+  return p.corrLoadPromise;
+}
+
+function waitForBrowserIdle(timeout=1200){
+  return new Promise(resolve=>{
+    if('requestIdleCallback' in window) requestIdleCallback(()=>resolve(),{timeout});
+    else setTimeout(resolve,120);
+  });
+}
+
+function startProgressiveLoading(){
+  if(progressiveLoadingStarted) return;
+  progressiveLoadingStarted=true;
+
+  if('IntersectionObserver' in window){
+    documentObserver=new IntersectionObserver(entries=>{
+      for(const entry of entries){
+        if(!entry.isIntersecting) continue;
+        const p=pages.find(page=>page.elPage===entry.target);
+        requestDocument(p,'auto');
+        documentObserver.unobserve(entry.target);
+      }
+    },{rootMargin:'1400px 0px'});
+    for(const p of pages) if(!p.docRequested) documentObserver.observe(p.elPage);
+  }else{
+    for(const p of pages) requestDocument(p,'auto');
+  }
+
+  let nextCorrection=0;
+  const worker=async()=>{
+    while(nextCorrection<pages.length){
+      const index=nextCorrection++;
+      if(index>0) await waitForBrowserIdle();
+      await ensureCorrectionLoaded(pages[index],index===0?'high':'low');
+    }
+  };
+  setTimeout(()=>{
+    for(let i=0;i<Math.min(CORRECTION_PRELOAD_WORKERS,pages.length);i++) worker();
+  },500);
+}
+
 /*** BUILD ***/
 function makePage(n){
   const el=document.createElement('div'); el.className='page';
@@ -2095,7 +2180,7 @@ function makePage(n){
   const badge=document.createElement('div'); badge.className='badge'; badge.textContent=pageLabel[0].toUpperCase()+pageLabel.slice(1); el.appendChild(badge);
   const box=document.createElement('div'); box.className='box'; el.appendChild(box);
 
-  const img=document.createElement('img'); img.alt=pageLabel[0].toUpperCase()+pageLabel.slice(1); img.decoding='async'; img.loading='lazy'; img.draggable=false; img.src=docPath(n); box.appendChild(img);
+  const img=document.createElement('img'); img.alt=pageLabel[0].toUpperCase()+pageLabel.slice(1); img.decoding='async'; img.draggable=false; box.appendChild(img);
 
   const canOv=document.createElement('canvas'); canOv.className='ov';
   const canDr=document.createElement('canvas'); canDr.className='dr';
@@ -2106,15 +2191,8 @@ function makePage(n){
   box.appendChild(canDr);
 
   const savedAnnotations=Array.isArray(storedAnnotations[String(n)]) ? storedAnnotations[String(n)] : [];
-  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],annotations:savedAnnotations,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer};
+  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],annotations:savedAnnotations,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer,docUrl:docPath(n),corrUrl:corrPath(n),docRequested:false,corrLoadPromise:null};
   pages.push(p);
-
-  const corr=new Image(); corr.decoding='async'; corr.loading='eager'; corr.fetchPriority='high';
-  function onCorrLoaded(){ p.imgCorr=corr; p.corrNW=corr.naturalWidth||0; p.corrNH=corr.naturalHeight||0; corrReadyCount++; updateRevealButton(); }
-  corr.addEventListener('load',()=>{ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); });
-  corr.addEventListener('error',()=>{ corrReadyCount++; updateRevealButton(); });
-  corr.src=corrPath(n);
-  if(corr.complete){ if(typeof corr.decode==='function'){ corr.decode().then(onCorrLoaded).catch(onCorrLoaded);} else onCorrLoaded(); }
 
   img.addEventListener('error',()=>{ el.classList.add('missing'); const warn=document.createElement('div'); warn.className='badge warn'; warn.textContent='Fichier manquant'; el.appendChild(warn); });
   img.addEventListener('load',()=>{ 
@@ -2141,7 +2219,10 @@ function makePage(n){
     mountLinksForPage(p);
     updateLinksInteractivity();
     updateLinkLayerScale(p);
+    startProgressiveLoading();
   });
+
+  if(n<=INITIAL_EAGER_DOCUMENTS) requestDocument(p,'high');
 
   const cap=document.createElement('div'); cap.className='num'; cap.textContent=displayNumberFromPhysical(n); el.appendChild(cap);
   return el;
