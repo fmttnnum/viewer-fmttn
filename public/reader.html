@@ -86,6 +86,11 @@
   .btn-dark{background:#111;color:#fff;border-color:#111}
   .btn-amber{background:#ffd166;border-color:#e9b44e}
   .btn-view-active{background:#e5e7eb;border-color:#d1d5db;font-weight:400}
+  .displayIconButton{width:36px;height:32px;padding:5px;display:inline-flex;align-items:center;justify-content:center}
+  .displayIconButton svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+  .displayIconButton .fullscreenExitIcon{display:none}
+  .displayIconButton.is-fullscreen .fullscreenEnterIcon{display:none}
+  .displayIconButton.is-fullscreen .fullscreenExitIcon{display:block}
   .btn:active::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.08);}
   .pill{padding:6px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;min-width:44px;text-align:center}
   .pageJumpGroup{display:flex;align-items:center;gap:5px}
@@ -170,6 +175,10 @@
       <button class="btn" id="mode1up">1 page</button>
       <button class="btn" id="mode2up">2 pages</button>
       <button class="btn" id="landscapeMode" title="Faire pivoter toutes les pages de 90° vers la droite">Mode paysage</button>
+      <button class="btn displayIconButton" id="fullscreenToggle" title="Passer en plein écran" aria-label="Passer en plein écran" aria-pressed="false">
+        <svg class="fullscreenEnterIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>
+        <svg class="fullscreenExitIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3M21 8h-5V3M16 21v-5h5M8 21v-5H3"/></svg>
+      </button>
     </div>
     <label class="row" style="gap:6px">
       <input type="checkbox" id="bookMode" /> Pair à gauche / impair à droite
@@ -344,6 +353,7 @@ const $zoomVal=document.getElementById('zoomVal');
 const $tocButton=document.getElementById('tocButton');
 const $mode1=document.getElementById('mode1up'), $mode2=document.getElementById('mode2up');
 const $landscape=document.getElementById('landscapeMode');
+const $fullscreen=document.getElementById('fullscreenToggle');
 const $book=document.getElementById('bookMode');
 const $zin=document.getElementById('zoomIn'), $zout=document.getElementById('zoomOut');
 const $fitW=document.getElementById('fitWidth');
@@ -421,6 +431,32 @@ const displayNumberFromIndex=index=>index===0?'0':index===1?'':String(index-1);
 const displayNumberFromPhysical=n=>displayNumberFromIndex(n-1);
 const pageLabelFromPhysical=n=>n===1?'couverture':n===2?'deuxième de couverture':`page ${n-FRONT_MATTER_PAGES}`;
 const bookPageToIndex=n=>n===0?0:n+FRONT_MATTER_PAGES-1;
+
+function currentFullscreenElement(){
+  return document.fullscreenElement||document.webkitFullscreenElement||null;
+}
+function updateFullscreenButton(){
+  const active=!!currentFullscreenElement();
+  $fullscreen.classList.toggle('is-fullscreen',active);
+  $fullscreen.classList.toggle('btn-view-active',active);
+  $fullscreen.setAttribute('aria-pressed',String(active));
+  $fullscreen.setAttribute('aria-label',active?'Quitter le plein écran':'Passer en plein écran');
+  $fullscreen.title=active?'Quitter le plein écran (Échap)':'Passer en plein écran';
+}
+async function toggleFullscreen(){
+  try{
+    if(currentFullscreenElement()){
+      const exit=document.exitFullscreen||document.webkitExitFullscreen;
+      if(exit) await exit.call(document);
+    }else{
+      const root=document.documentElement;
+      const enter=root.requestFullscreen||root.webkitRequestFullscreen;
+      if(enter) await enter.call(root);
+    }
+  }catch(error){
+    console.warn('Le mode plein écran n’a pas pu être activé :',error);
+  }
+}
 
 function loadStoredAnnotations(){
   try{
@@ -2413,6 +2449,16 @@ window.addEventListener('load', async ()=>{
   $mode1.addEventListener('click',()=>{layout='1up'; rebuild();});
   $mode2.addEventListener('click',()=>{layout='2up'; rebuild();});
   $landscape.addEventListener('click',toggleLandscapeMode);
+  const fullscreenSupported=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen);
+  $fullscreen.disabled=!fullscreenSupported;
+  if(fullscreenSupported){
+    $fullscreen.addEventListener('click',toggleFullscreen);
+    document.addEventListener('fullscreenchange',updateFullscreenButton);
+    document.addEventListener('webkitfullscreenchange',updateFullscreenButton);
+  }else{
+    $fullscreen.title='Le plein écran n’est pas disponible dans ce navigateur';
+  }
+  updateFullscreenButton();
   $book.addEventListener('change',e=>{bookMode=e.target.checked; if(layout==='2up') rebuild();});
 
   document.getElementById('zoomIn').addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
@@ -2511,11 +2557,17 @@ window.addEventListener('load', async ()=>{
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
     document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
-    if(annotationTool==='select'&&selectedAnnotation&&selectedAnnotationList().length===1){
-      const {p,annotation}=selectedAnnotation;
-      const before=cloneAnnotation(annotation);
-      annotation.color=annotationColor;
-      recordAnnotationHistory({type:'annotation-transform',page:p,annotation,before,after:cloneAnnotation(annotation)});
+    if(annotationTool==='select'&&selectedAnnotation){
+      const {p}=selectedAnnotation;
+      const annotations=selectedAnnotationList();
+      if(!annotations.length||annotations.every(annotation=>annotation.color===annotationColor)) return;
+      const before=annotations.map(cloneAnnotation);
+      annotations.forEach(annotation=>{ annotation.color=annotationColor; });
+      if(annotations.length===1){
+        recordAnnotationHistory({type:'annotation-transform',page:p,annotation:annotations[0],before:before[0],after:cloneAnnotation(annotations[0])});
+      }else{
+        recordAnnotationHistory({type:'annotation-transform-multiple',page:p,annotations:[...annotations],before,after:annotations.map(cloneAnnotation)});
+      }
       saveAnnotations();
       redrawOverlay(p);
       redrawDraft(p,null);
