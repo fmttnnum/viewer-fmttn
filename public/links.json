@@ -12,27 +12,561 @@
   "8": [
     {
       "kind": "internal",
-      "xPct": 6.0731,
-      "yPct": 7.9194,
-      "wPct": 85.023,
-      "hPct": 2.0358,
-      "gotoPage": 11
+      "xPct": 5.8327,
+      "yPct": 7.9993,
+      "wPct": 84.9889,
+      "hPct": 1.9829,
+      "gotoPage": 9
     },
     {
       "kind": "internal",
-      "xPct": 5.9579,
-      "yPct": 10.0366,
-      "wPct": 85.023,
-      "hPct": 2.2801,
-      "gotoPage": 11
+      "xPct": 7.0457,
+      "yPct": 9.9822,
+      "wPct": 83.7001,
+      "hPct": 2.3044,
+      "gotoPage": 9
     },
     {
       "kind": "internal",
-      "xPct": 5.9579,
-      "yPct": 12.3982,
-      "wPct": 85.023,
-      "hPct": 1.9544,
-      "gotoPage": 14
+      "xPct": 6.2876,
+      "yPct": 14.323,
+      "wPct": 84.6098,
+      "hPct": 2.1436,
+      "gotoPage": 16
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.2118,
+      "yPct": 12.4474,
+      "wPct": 84.6098,
+      "hPct": 1.8757,
+      "gotoPage": 12
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.7425,
+      "yPct": 16.4667,
+      "wPct": 84.0791,
+      "hPct": 2.09,
+      "gotoPage": 17
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 20.7539,
+      "wPct": 84.3824,
+      "hPct": 1.8757,
+      "gotoPage": 19
+    },
+    {
+      "kind": "internal",
+      "xPct": 5.6811,
+      "yPct": 23.487,
+      "wPct": 85.2922,
+      "hPct": 2.3044,
+      "gotoPage": 20
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.2876,
+      "yPct": 25.8986,
+      "wPct": 84.6098,
+      "hPct": 2.358,
+      "gotoPage": 20
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.515,
+      "yPct": 28.3638,
+      "wPct": 84.3066,
+      "hPct": 1.9293,
+      "gotoPage": 34
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 30.3466,
+      "wPct": 84.2308,
+      "hPct": 2.09,
+      "gotoPage": 40
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 32.651,
+      "wPct": 84.2308,
+      "hPct": 1.8221,
+      "gotoPage": 50
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 35.1698,
+      "wPct": 84.155,
+      "hPct": 2.6795,
+      "gotoPage": 60
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 37.9565,
+      "wPct": 84.155,
+      "hPct": 2.2508,
+      "gotoPage": 60
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 40.2609,
+      "wPct": 84.2308,
+      "hPct": 1.9829,
+      "gotoPage": 64
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.6667,
+      "yPct": 42.5117,
+      "wPct": 84.155,
+      "hPct": 1.6613,
+      "gotoPage": 68
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.6667,
+      "yPct": 44.2266,
+      "wPct": 84.155,
+      "hPct": 2.1436,
+      "gotoPage": 74
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 46.4774,
+      "wPct": 84.155,
+      "hPct": 1.8221,
+      "gotoPage": 78
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.515,
+      "yPct": 48.4602,
+      "wPct": 84.155,
+      "hPct": 1.7685,
+      "gotoPage": 80
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.6667,
+      "yPct": 50.3359,
+      "wPct": 84.0033,
+      "hPct": 2.09,
+      "gotoPage": 82
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 53.2298,
+      "wPct": 83.9275,
+      "hPct": 2.5723,
+      "gotoPage": 84
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.5909,
+      "yPct": 55.9093,
+      "wPct": 83.9275,
+      "hPct": 2.1436,
+      "gotoPage": 84
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.0601,
+      "yPct": 60.1966,
+      "wPct": 84.6857,
+      "hPct": 2.358,
+      "gotoPage": 87
+    },
+    {
+      "kind": "internal",
+      "xPct": 5.9843,
+      "yPct": 63.144,
+      "wPct": 84.8373,
+      "hPct": 2.4116,
+      "gotoPage": 88
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.0601,
+      "yPct": 65.77,
+      "wPct": 84.6857,
+      "hPct": 2.2508,
+      "gotoPage": 88
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.2876,
+      "yPct": 68.2352,
+      "wPct": 84.3824,
+      "hPct": 1.8221,
+      "gotoPage": 98
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.0601,
+      "yPct": 70.3252,
+      "wPct": 84.6857,
+      "hPct": 1.8221,
+      "gotoPage": 106
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.2876,
+      "yPct": 72.4152,
+      "wPct": 84.4582,
+      "hPct": 1.6613,
+      "gotoPage": 110
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.3634,
+      "yPct": 74.2909,
+      "wPct": 84.3824,
+      "hPct": 1.8221,
+      "gotoPage": 112
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.4392,
+      "yPct": 76.1666,
+      "wPct": 84.4582,
+      "hPct": 1.9829,
+      "gotoPage": 114
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.515,
+      "yPct": 78.3102,
+      "wPct": 84.4582,
+      "hPct": 1.9829,
+      "gotoPage": 116
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.6667,
+      "yPct": 80.4538,
+      "wPct": 84.3066,
+      "hPct": 1.9829,
+      "gotoPage": 118
+    },
+    {
+      "kind": "internal",
+      "xPct": 6.2118,
+      "yPct": 82.651,
+      "wPct": 84.8373,
+      "hPct": 1.9829,
+      "gotoPage": 122
+    }
+  ],
+  "9": [
+    {
+      "kind": "internal",
+      "xPct": 10.3816,
+      "yPct": 7.3637,
+      "wPct": 83.2452,
+      "hPct": 2.6795,
+      "gotoPage": 124
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.5332,
+      "yPct": 10.2576,
+      "wPct": 82.9419,
+      "hPct": 1.7685,
+      "gotoPage": 124
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.5332,
+      "yPct": 12.1868,
+      "wPct": 83.0177,
+      "hPct": 1.9293,
+      "gotoPage": 126
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.5332,
+      "yPct": 14.2769,
+      "wPct": 83.0177,
+      "hPct": 2.1436,
+      "gotoPage": 130
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.4574,
+      "yPct": 16.3669,
+      "wPct": 83.1694,
+      "hPct": 1.9829,
+      "gotoPage": 134
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.5332,
+      "yPct": 18.5105,
+      "wPct": 83.0935,
+      "hPct": 1.9829,
+      "gotoPage": 146
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.3816,
+      "yPct": 21.2972,
+      "wPct": 83.321,
+      "hPct": 2.6259,
+      "gotoPage": 148
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.6091,
+      "yPct": 23.9768,
+      "wPct": 83.0935,
+      "hPct": 2.0364,
+      "gotoPage": 148
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.3816,
+      "yPct": 26.1204,
+      "wPct": 83.321,
+      "hPct": 1.9293,
+      "gotoPage": 153
+    },
+    {
+      "kind": "internal",
+      "xPct": 10.6091,
+      "yPct": 27.8889,
+      "wPct": 83.321,
+      "hPct": 2.1972,
+      "gotoPage": 158
+    }
+  ],
+  "16": [
+    {
+      "kind": "external",
+      "xPct": 80.0558,
+      "yPct": 67.7363,
+      "wPct": 9.022,
+      "hPct": 4.3944,
+      "href": "https://genqrco.de/AQX4j6E"
+    }
+  ],
+  "17": [
+    {
+      "kind": "external",
+      "xPct": 42.6789,
+      "yPct": 4.9892,
+      "wPct": 7.809,
+      "hPct": 4.1265,
+      "href": "https://genqrco.de/XNqexjD"
+    },
+    {
+      "kind": "external",
+      "xPct": 83.9224,
+      "yPct": 5.0428,
+      "wPct": 7.9606,
+      "hPct": 3.9657,
+      "href": "https://genqrco.de/hPVGpQ1"
+    }
+  ],
+  "23": [
+    {
+      "kind": "external",
+      "xPct": 44.8092,
+      "yPct": 3.4565,
+      "wPct": 8.1676,
+      "hPct": 4.2191,
+      "href": "https://genqrco.de/vyyfUoJ"
+    }
+  ],
+  "33": [
+    {
+      "kind": "external",
+      "xPct": 42.9244,
+      "yPct": 52.2708,
+      "wPct": 8.0629,
+      "hPct": 4.1451,
+      "href": "https://genqrco.de/ZU9sDc2"
+    },
+    {
+      "kind": "external",
+      "xPct": 83.2389,
+      "yPct": 46.6453,
+      "wPct": 8.7959,
+      "hPct": 4.0711,
+      "href": "https://genqrco.de/VTX9vN6"
+    }
+  ],
+  "58": [
+    {
+      "kind": "external",
+      "xPct": 34.2332,
+      "yPct": 3.4366,
+      "wPct": 8.0629,
+      "hPct": 3.9971,
+      "href": "https://genqrco.de/kKZSYTy"
+    }
+  ],
+  "68": [
+    {
+      "kind": "external",
+      "xPct": 14.0236,
+      "yPct": 40.4075,
+      "wPct": 9.2147,
+      "hPct": 4.7373,
+      "href": "https://genqrco.de/Ilxv2JZ"
+    },
+    {
+      "kind": "external",
+      "xPct": 31.6154,
+      "yPct": 40.5555,
+      "wPct": 8.9006,
+      "hPct": 4.6632,
+      "href": "https://genqrco.de/TqAWnCa"
+    }
+  ],
+  "69": [
+    {
+      "kind": "external",
+      "xPct": 60.6209,
+      "yPct": 7.9237,
+      "wPct": 8.7959,
+      "hPct": 4.8853,
+      "href": "https://genqrco.de/sRRoerV"
+    }
+  ],
+  "93": [
+    {
+      "kind": "external",
+      "xPct": 46.5894,
+      "yPct": 43.5669,
+      "wPct": 8.2723,
+      "hPct": 4.2191,
+      "href": "https://genqrco.de/o3DkFFj"
+    }
+  ],
+  "94": [
+    {
+      "kind": "external",
+      "xPct": 81.0399,
+      "yPct": 14.5621,
+      "wPct": 8.0629,
+      "hPct": 4.1451,
+      "href": "https://genqrco.de/BN68m9U"
+    }
+  ],
+  "102": [
+    {
+      "kind": "external",
+      "xPct": 80.7258,
+      "yPct": 51.5851,
+      "wPct": 8.9006,
+      "hPct": 4.5892,
+      "href": "https://genqrco.de/rqcuqh2"
+    }
+  ],
+  "119": [
+    {
+      "kind": "external",
+      "xPct": 79.8881,
+      "yPct": 5.6668,
+      "wPct": 9.11,
+      "hPct": 4.7373,
+      "href": "https://genqrco.de/SUa66Ts"
+    }
+  ],
+  "121": [
+    {
+      "kind": "external",
+      "xPct": 72.5582,
+      "yPct": 61.5735,
+      "wPct": 9.4242,
+      "hPct": 4.8113,
+      "href": "https://genqrco.de/JP90Nli"
+    }
+  ],
+  "128": [
+    {
+      "kind": "external",
+      "xPct": 27.1127,
+      "yPct": 32.338,
+      "wPct": 9.3195,
+      "hPct": 4.5152,
+      "href": "https://genqrco.de/MnZyiGj"
+    },
+    {
+      "kind": "external",
+      "xPct": 44.2857,
+      "yPct": 32.338,
+      "wPct": 8.6912,
+      "hPct": 4.2931,
+      "href": "https://genqrco.de/PXLtjJf"
+    },
+    {
+      "kind": "external",
+      "xPct": 60.8303,
+      "yPct": 32.338,
+      "wPct": 9.0053,
+      "hPct": 4.4412,
+      "href": "https://genqrco.de/spGEO6Q"
+    }
+  ],
+  "130": [
+    {
+      "kind": "external",
+      "xPct": 38.7359,
+      "yPct": 40.0579,
+      "wPct": 9.2147,
+      "hPct": 4.5152,
+      "href": "https://genqrco.de/gMmkhwZ"
+    }
+  ],
+  "132": [
+    {
+      "kind": "external",
+      "xPct": 34.6521,
+      "yPct": 16.0233,
+      "wPct": 9.11,
+      "hPct": 4.7373,
+      "href": "https://genqrco.de/g9p7pXN"
+    }
+  ],
+  "136": [
+    {
+      "kind": "external",
+      "xPct": 34.5474,
+      "yPct": 16.1409,
+      "wPct": 9.0053,
+      "hPct": 4.6632,
+      "href": "https://genqrco.de/4Ablc98"
+    }
+  ],
+  "139": [
+    {
+      "kind": "external",
+      "xPct": 79.9928,
+      "yPct": 40.156,
+      "wPct": 9.3195,
+      "hPct": 4.6632,
+      "href": "https://genqrco.de/1UGw6Fn"
+    }
+  ],
+  "161": [
+    {
+      "kind": "external",
+      "xPct": 72.8723,
+      "yPct": 5.374,
+      "wPct": 9.11,
+      "hPct": 4.8113,
+      "href": "https://genqrco.de/dKBGPUT"
     }
   ]
 }
