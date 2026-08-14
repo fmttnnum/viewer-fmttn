@@ -50,9 +50,9 @@ function accessDenied(request: NextRequest): NextResponse {
   </head>
   <body>
     <main>
-      <h1>Accès réservé aux professeurs</h1>
-      <p>Ouvrez ce manuel depuis la page sécurisée de votre espace professeur sur FMTTN.</p>
-      <a href="https://www.fmttn.com/">Retourner sur FMTTN</a>
+      <h1>Accès réservé aux professeurs qui utilisent la méthode ALT_X en classe</h1>
+      <p>Ouvrez ce manuel depuis la page sécurisée de votre espace professeur sur www.fmttn.com.</p>
+      <a href="https://www.fmttn.com/">Retourner sur le site Internet</a>
     </main>
   </body>
 </html>`,
