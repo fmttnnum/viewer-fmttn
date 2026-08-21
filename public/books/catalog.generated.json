@@ -674,10 +674,703 @@
       "title": "@LT_X – Formation numérique 1b",
       "fileLabel": "Alt-x_1b",
       "basePath": "./books/altx-1b",
-      "documentBasePath": "./books/altx-1b/sans-correction",
-      "correctionBasePath": "./books/altx-1b/corrections",
+      "documentBasePath": "./books/altx-1b/optimized/sans-correction",
+      "correctionBasePath": "./books/altx-1b/optimized/corrections",
       "linksUrl": "./books/altx-1b/links.json",
-      "pages": []
+      "pages": [
+        {
+          "document": "Altx_1b_Corrections_version Numabib.webp",
+          "correction": "Altx_1b_Corrections_version Numabib.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib2.webp",
+          "correction": "Altx_1b_Corrections_version Numabib2.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib3.webp",
+          "correction": "Altx_1b_Corrections_version Numabib3.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib4.webp",
+          "correction": "Altx_1b_Corrections_version Numabib4.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib5.webp",
+          "correction": "Altx_1b_Corrections_version Numabib5.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib6.webp",
+          "correction": "Altx_1b_Corrections_version Numabib6.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib7.webp",
+          "correction": "Altx_1b_Corrections_version Numabib7.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib8.webp",
+          "correction": "Altx_1b_Corrections_version Numabib8.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib9.webp",
+          "correction": "Altx_1b_Corrections_version Numabib9.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib10.webp",
+          "correction": "Altx_1b_Corrections_version Numabib10.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib11.webp",
+          "correction": "Altx_1b_Corrections_version Numabib11.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib12.webp",
+          "correction": "Altx_1b_Corrections_version Numabib12.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib13.webp",
+          "correction": "Altx_1b_Corrections_version Numabib13.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib14.webp",
+          "correction": "Altx_1b_Corrections_version Numabib14.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib15.webp",
+          "correction": "Altx_1b_Corrections_version Numabib15.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib16.webp",
+          "correction": "Altx_1b_Corrections_version Numabib16.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib17.webp",
+          "correction": "Altx_1b_Corrections_version Numabib17.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib18.webp",
+          "correction": "Altx_1b_Corrections_version Numabib18.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib19.webp",
+          "correction": "Altx_1b_Corrections_version Numabib19.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib20.webp",
+          "correction": "Altx_1b_Corrections_version Numabib20.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib21.webp",
+          "correction": "Altx_1b_Corrections_version Numabib21.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib22.webp",
+          "correction": "Altx_1b_Corrections_version Numabib22.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib23.webp",
+          "correction": "Altx_1b_Corrections_version Numabib23.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib24.webp",
+          "correction": "Altx_1b_Corrections_version Numabib24.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib25.webp",
+          "correction": "Altx_1b_Corrections_version Numabib25.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib26.webp",
+          "correction": "Altx_1b_Corrections_version Numabib26.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib27.webp",
+          "correction": "Altx_1b_Corrections_version Numabib27.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib28.webp",
+          "correction": "Altx_1b_Corrections_version Numabib28.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib29.webp",
+          "correction": "Altx_1b_Corrections_version Numabib29.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib30.webp",
+          "correction": "Altx_1b_Corrections_version Numabib30.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib31.webp",
+          "correction": "Altx_1b_Corrections_version Numabib31.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib32.webp",
+          "correction": "Altx_1b_Corrections_version Numabib32.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib33.webp",
+          "correction": "Altx_1b_Corrections_version Numabib33.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib34.webp",
+          "correction": "Altx_1b_Corrections_version Numabib34.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib35.webp",
+          "correction": "Altx_1b_Corrections_version Numabib35.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib36.webp",
+          "correction": "Altx_1b_Corrections_version Numabib36.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib37.webp",
+          "correction": "Altx_1b_Corrections_version Numabib37.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib38.webp",
+          "correction": "Altx_1b_Corrections_version Numabib38.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib39.webp",
+          "correction": "Altx_1b_Corrections_version Numabib39.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib40.webp",
+          "correction": "Altx_1b_Corrections_version Numabib40.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib41.webp",
+          "correction": "Altx_1b_Corrections_version Numabib41.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib42.webp",
+          "correction": "Altx_1b_Corrections_version Numabib42.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib43.webp",
+          "correction": "Altx_1b_Corrections_version Numabib43.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib44.webp",
+          "correction": "Altx_1b_Corrections_version Numabib44.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib45.webp",
+          "correction": "Altx_1b_Corrections_version Numabib45.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib46.webp",
+          "correction": "Altx_1b_Corrections_version Numabib46.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib47.webp",
+          "correction": "Altx_1b_Corrections_version Numabib47.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib48.webp",
+          "correction": "Altx_1b_Corrections_version Numabib48.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib49.webp",
+          "correction": "Altx_1b_Corrections_version Numabib49.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib50.webp",
+          "correction": "Altx_1b_Corrections_version Numabib50.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib51.webp",
+          "correction": "Altx_1b_Corrections_version Numabib51.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib52.webp",
+          "correction": "Altx_1b_Corrections_version Numabib52.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib53.webp",
+          "correction": "Altx_1b_Corrections_version Numabib53.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib54.webp",
+          "correction": "Altx_1b_Corrections_version Numabib54.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib55.webp",
+          "correction": "Altx_1b_Corrections_version Numabib55.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib56.webp",
+          "correction": "Altx_1b_Corrections_version Numabib56.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib57.webp",
+          "correction": "Altx_1b_Corrections_version Numabib57.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib58.webp",
+          "correction": "Altx_1b_Corrections_version Numabib58.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib59.webp",
+          "correction": "Altx_1b_Corrections_version Numabib59.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib60.webp",
+          "correction": "Altx_1b_Corrections_version Numabib60.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib61.webp",
+          "correction": "Altx_1b_Corrections_version Numabib61.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib62.webp",
+          "correction": "Altx_1b_Corrections_version Numabib62.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib63.webp",
+          "correction": "Altx_1b_Corrections_version Numabib63.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib64.webp",
+          "correction": "Altx_1b_Corrections_version Numabib64.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib65.webp",
+          "correction": "Altx_1b_Corrections_version Numabib65.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib66.webp",
+          "correction": "Altx_1b_Corrections_version Numabib66.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib67.webp",
+          "correction": "Altx_1b_Corrections_version Numabib67.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib68.webp",
+          "correction": "Altx_1b_Corrections_version Numabib68.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib69.webp",
+          "correction": "Altx_1b_Corrections_version Numabib69.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib70.webp",
+          "correction": "Altx_1b_Corrections_version Numabib70.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib71.webp",
+          "correction": "Altx_1b_Corrections_version Numabib71.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib72.webp",
+          "correction": "Altx_1b_Corrections_version Numabib72.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib73.webp",
+          "correction": "Altx_1b_Corrections_version Numabib73.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib74.webp",
+          "correction": "Altx_1b_Corrections_version Numabib74.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib75.webp",
+          "correction": "Altx_1b_Corrections_version Numabib75.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib76.webp",
+          "correction": "Altx_1b_Corrections_version Numabib76.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib77.webp",
+          "correction": "Altx_1b_Corrections_version Numabib77.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib78.webp",
+          "correction": "Altx_1b_Corrections_version Numabib78.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib79.webp",
+          "correction": "Altx_1b_Corrections_version Numabib79.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib80.webp",
+          "correction": "Altx_1b_Corrections_version Numabib80.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib81.webp",
+          "correction": "Altx_1b_Corrections_version Numabib81.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib82.webp",
+          "correction": "Altx_1b_Corrections_version Numabib82.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib83.webp",
+          "correction": "Altx_1b_Corrections_version Numabib83.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib84.webp",
+          "correction": "Altx_1b_Corrections_version Numabib84.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib85.webp",
+          "correction": "Altx_1b_Corrections_version Numabib85.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib86.webp",
+          "correction": "Altx_1b_Corrections_version Numabib86.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib87.webp",
+          "correction": "Altx_1b_Corrections_version Numabib87.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib88.webp",
+          "correction": "Altx_1b_Corrections_version Numabib88.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib89.webp",
+          "correction": "Altx_1b_Corrections_version Numabib89.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib90.webp",
+          "correction": "Altx_1b_Corrections_version Numabib90.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib91.webp",
+          "correction": "Altx_1b_Corrections_version Numabib91.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib92.webp",
+          "correction": "Altx_1b_Corrections_version Numabib92.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib93.webp",
+          "correction": "Altx_1b_Corrections_version Numabib93.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib94.webp",
+          "correction": "Altx_1b_Corrections_version Numabib94.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib95.webp",
+          "correction": "Altx_1b_Corrections_version Numabib95.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib96.webp",
+          "correction": "Altx_1b_Corrections_version Numabib96.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib97.webp",
+          "correction": "Altx_1b_Corrections_version Numabib97.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib98.webp",
+          "correction": "Altx_1b_Corrections_version Numabib98.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib99.webp",
+          "correction": "Altx_1b_Corrections_version Numabib99.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib100.webp",
+          "correction": "Altx_1b_Corrections_version Numabib100.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib101.webp",
+          "correction": "Altx_1b_Corrections_version Numabib101.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib102.webp",
+          "correction": "Altx_1b_Corrections_version Numabib102.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib103.webp",
+          "correction": "Altx_1b_Corrections_version Numabib103.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib104.webp",
+          "correction": "Altx_1b_Corrections_version Numabib104.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib105.webp",
+          "correction": "Altx_1b_Corrections_version Numabib105.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib106.webp",
+          "correction": "Altx_1b_Corrections_version Numabib106.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib107.webp",
+          "correction": "Altx_1b_Corrections_version Numabib107.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib108.webp",
+          "correction": "Altx_1b_Corrections_version Numabib108.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib109.webp",
+          "correction": "Altx_1b_Corrections_version Numabib109.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib110.webp",
+          "correction": "Altx_1b_Corrections_version Numabib110.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib111.webp",
+          "correction": "Altx_1b_Corrections_version Numabib111.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib112.webp",
+          "correction": "Altx_1b_Corrections_version Numabib112.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib113.webp",
+          "correction": "Altx_1b_Corrections_version Numabib113.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib114.webp",
+          "correction": "Altx_1b_Corrections_version Numabib114.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib115.webp",
+          "correction": "Altx_1b_Corrections_version Numabib115.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib116.webp",
+          "correction": "Altx_1b_Corrections_version Numabib116.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib117.webp",
+          "correction": "Altx_1b_Corrections_version Numabib117.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib118.webp",
+          "correction": "Altx_1b_Corrections_version Numabib118.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib119.webp",
+          "correction": "Altx_1b_Corrections_version Numabib119.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib120.webp",
+          "correction": "Altx_1b_Corrections_version Numabib120.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib121.webp",
+          "correction": "Altx_1b_Corrections_version Numabib121.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib122.webp",
+          "correction": "Altx_1b_Corrections_version Numabib122.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib123.webp",
+          "correction": "Altx_1b_Corrections_version Numabib123.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib124.webp",
+          "correction": "Altx_1b_Corrections_version Numabib124.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib125.webp",
+          "correction": "Altx_1b_Corrections_version Numabib125.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib126.webp",
+          "correction": "Altx_1b_Corrections_version Numabib126.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib127.webp",
+          "correction": "Altx_1b_Corrections_version Numabib127.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib128.webp",
+          "correction": "Altx_1b_Corrections_version Numabib128.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib129.webp",
+          "correction": "Altx_1b_Corrections_version Numabib129.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib130.webp",
+          "correction": "Altx_1b_Corrections_version Numabib130.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib131.webp",
+          "correction": "Altx_1b_Corrections_version Numabib131.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib132.webp",
+          "correction": "Altx_1b_Corrections_version Numabib132.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib133.webp",
+          "correction": "Altx_1b_Corrections_version Numabib133.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib134.webp",
+          "correction": "Altx_1b_Corrections_version Numabib134.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib135.webp",
+          "correction": "Altx_1b_Corrections_version Numabib135.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib136.webp",
+          "correction": "Altx_1b_Corrections_version Numabib136.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib137.webp",
+          "correction": "Altx_1b_Corrections_version Numabib137.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib138.webp",
+          "correction": "Altx_1b_Corrections_version Numabib138.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib139.webp",
+          "correction": "Altx_1b_Corrections_version Numabib139.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib140.webp",
+          "correction": "Altx_1b_Corrections_version Numabib140.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib141.webp",
+          "correction": "Altx_1b_Corrections_version Numabib141.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib142.webp",
+          "correction": "Altx_1b_Corrections_version Numabib142.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib143.webp",
+          "correction": "Altx_1b_Corrections_version Numabib143.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib144.webp",
+          "correction": "Altx_1b_Corrections_version Numabib144.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib145.webp",
+          "correction": "Altx_1b_Corrections_version Numabib145.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib146.webp",
+          "correction": "Altx_1b_Corrections_version Numabib146.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib147.webp",
+          "correction": "Altx_1b_Corrections_version Numabib147.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib148.webp",
+          "correction": "Altx_1b_Corrections_version Numabib148.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib149.webp",
+          "correction": "Altx_1b_Corrections_version Numabib149.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib150.webp",
+          "correction": "Altx_1b_Corrections_version Numabib150.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib151.webp",
+          "correction": "Altx_1b_Corrections_version Numabib151.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib152.webp",
+          "correction": "Altx_1b_Corrections_version Numabib152.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib153.webp",
+          "correction": "Altx_1b_Corrections_version Numabib153.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib154.webp",
+          "correction": "Altx_1b_Corrections_version Numabib154.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib155.webp",
+          "correction": "Altx_1b_Corrections_version Numabib155.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib156.webp",
+          "correction": "Altx_1b_Corrections_version Numabib156.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib157.webp",
+          "correction": "Altx_1b_Corrections_version Numabib157.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib158.webp",
+          "correction": "Altx_1b_Corrections_version Numabib158.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib159.webp",
+          "correction": "Altx_1b_Corrections_version Numabib159.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib160.webp",
+          "correction": "Altx_1b_Corrections_version Numabib160.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib161.webp",
+          "correction": "Altx_1b_Corrections_version Numabib161.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib162.webp",
+          "correction": "Altx_1b_Corrections_version Numabib162.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib163.webp",
+          "correction": "Altx_1b_Corrections_version Numabib163.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib164.webp",
+          "correction": "Altx_1b_Corrections_version Numabib164.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib165.webp",
+          "correction": "Altx_1b_Corrections_version Numabib165.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib166.webp",
+          "correction": "Altx_1b_Corrections_version Numabib166.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib167.webp",
+          "correction": "Altx_1b_Corrections_version Numabib167.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib168.webp",
+          "correction": "Altx_1b_Corrections_version Numabib168.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib169.webp",
+          "correction": "Altx_1b_Corrections_version Numabib169.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib170.webp",
+          "correction": "Altx_1b_Corrections_version Numabib170.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib171.webp",
+          "correction": "Altx_1b_Corrections_version Numabib171.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib172.webp",
+          "correction": "Altx_1b_Corrections_version Numabib172.webp"
+        },
+        {
+          "document": "Altx_1b_Corrections_version Numabib173.webp",
+          "correction": "Altx_1b_Corrections_version Numabib173.webp"
+        }
+      ]
     }
   ]
 }
