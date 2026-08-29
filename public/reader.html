@@ -1821,11 +1821,8 @@ function attachDrawHandlers(p){
   let activePointerId=null;
   const touchGesturePoints=new Map();
   let twoFingerTouchNavigation=false;
-  let twoFingerGestureMode='none';
-  let twoFingerStartCenterY=0;
-  let twoFingerStartDistance=0;
   let lastTwoFingerCenterY=0;
-  let lastTwoFingerDistance=0;
+  let lastTwoFingerMoveTime=0;
   let annotationDragClientPoint=null;
   let annotationAutoScrollFrame=0;
   let annotationAutoScrollEdgeStartedAt=0;
@@ -1837,8 +1834,7 @@ function attachDrawHandlers(p){
     if(points.length<2) return null;
     const first=points[0], second=points[1];
     return {
-      centerY:(first.y+second.y)/2,
-      distance:Math.hypot(second.x-first.x,second.y-first.y)
+      centerY:(first.y+second.y)/2
     };
   };
   function cancelActiveTouchWorkForTwoFingerNavigation(){
@@ -1997,11 +1993,8 @@ function attachDrawHandlers(p){
         cancelActiveTouchWorkForTwoFingerNavigation();
         twoFingerTouchNavigation=true;
         const metrics=twoFingerMetrics();
-        twoFingerGestureMode=annotationTool?'pending':'scroll';
-        twoFingerStartCenterY=metrics?.centerY||0;
-        twoFingerStartDistance=metrics?.distance||0;
         lastTwoFingerCenterY=metrics?.centerY||0;
-        lastTwoFingerDistance=metrics?.distance||0;
+        lastTwoFingerMoveTime=Number.isFinite(e.timeStamp)?e.timeStamp:performance.now();
         return;
       }
     }
@@ -2312,42 +2305,14 @@ function attachDrawHandlers(p){
         e.preventDefault();
         const metrics=twoFingerMetrics();
         if(metrics){
-          if(twoFingerGestureMode==='pending'){
-            const scrollIntent=Math.abs(metrics.centerY-twoFingerStartCenterY);
-            const pinchIntent=Math.abs(metrics.distance-twoFingerStartDistance);
-            if(pinchIntent>=14&&pinchIntent>scrollIntent*1.15){
-              twoFingerGestureMode='pinch';
-            }else if(scrollIntent>=8){
-              twoFingerGestureMode='scroll';
-            }else{
-              return;
-            }
-          }
-          if(twoFingerGestureMode==='scroll'){
-            const fingerDelta=lastTwoFingerCenterY-metrics.centerY;
-            const fingerSpeed=Math.abs(fingerDelta);
-            const scrollMultiplier=fingerSpeed>=22?2.2:fingerSpeed>=10?1.65:fingerSpeed>=4?1.25:1;
-            window.scrollBy(0,fingerDelta*scrollMultiplier);
-            lastTwoFingerCenterY=metrics.centerY;
-            return;
-          }
-          if(twoFingerGestureMode==='pinch'&&lastTwoFingerDistance>0&&metrics.distance>0){
-            const previousZoom=zoomPct;
-            const nextZoom=Math.round(clamp(previousZoom*(metrics.distance/lastTwoFingerDistance),MIN_PCT,MAX_PCT)*10)/10;
-            if(Math.abs(nextZoom-previousZoom)>=0.05){
-              const beforeRect=p.canDr.getBoundingClientRect();
-              const anchorRatioY=beforeRect.height
-                ?clamp((metrics.centerY-beforeRect.top)/beforeRect.height,0,1)
-                :0.5;
-              zoomPct=nextZoom;
-              applyZoom();
-              const afterRect=p.canDr.getBoundingClientRect();
-              const targetScrollY=window.scrollY+(afterRect.top+anchorRatioY*afterRect.height-metrics.centerY);
-              window.scrollTo(0,Math.max(0,targetScrollY));
-              lastTwoFingerDistance=metrics.distance;
-            }
-          }
+          const now=Number.isFinite(e.timeStamp)?e.timeStamp:performance.now();
+          const elapsed=Math.max(1,Math.min(80,now-lastTwoFingerMoveTime));
+          const fingerDelta=lastTwoFingerCenterY-metrics.centerY;
+          const fingerVelocity=Math.abs(fingerDelta)/elapsed;
+          const scrollMultiplier=fingerVelocity>=0.9?3.2:fingerVelocity>=0.5?2.5:fingerVelocity>=0.25?1.8:1.15;
+          window.scrollBy(0,fingerDelta*scrollMultiplier);
           lastTwoFingerCenterY=metrics.centerY;
+          lastTwoFingerMoveTime=now;
         }
         return;
       }
@@ -2395,11 +2360,8 @@ function attachDrawHandlers(p){
       }catch(_){}
       if(touchGesturePoints.size===0){
         twoFingerTouchNavigation=false;
-        twoFingerGestureMode='none';
-        twoFingerStartCenterY=0;
-        twoFingerStartDistance=0;
         lastTwoFingerCenterY=0;
-        lastTwoFingerDistance=0;
+        lastTwoFingerMoveTime=0;
       }
       return;
     }
