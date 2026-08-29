@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root{
-    --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --warn:#ef4444;
+    --gap:24px; --gutter:18px; --bg:#f5f6f8; --ink:#111; --panelW:270px; --compactW:44px; --warn:#ef4444;
     /* Mains vectorielles fines : elles restent nettes, même sur un écran Retina/HiDPI. */
     --cursor-hand-open:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 32 32'%3E%3Cpath d='M11 15V8a2 2 0 0 1 4 0v5V6a2 2 0 0 1 4 0v7V8a2 2 0 0 1 4 0v7-4a2 2 0 0 1 4 0v7c0 5.5-4.5 10-10 10h-1c-3.7 0-6.4-1.6-8.3-4.7l-1.8-3a2 2 0 0 1 3.2-2.4L11 21z' fill='white' stroke='%23111827' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 10 11, grab;
     --cursor-hand-closed:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 32 32'%3E%3Cpath d='M9 14v5.5l-2-1.8a2 2 0 0 0-3 2.6l3.1 4.2A9 9 0 0 0 14.3 28H17c5 0 9-4 9-9v-5a2 2 0 0 0-4 0v-1a2 2 0 0 0-4 0v-1a2 2 0 0 0-4 0v2a2.5 2.5 0 0 0-5 0z' fill='white' stroke='%23111827' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 14v4m4-5v5m4-4v4' fill='none' stroke='%23111827' stroke-width='1.15' stroke-linecap='round'/%3E%3C/svg%3E") 10 12, grabbing;
@@ -95,7 +95,19 @@
   .pill{padding:6px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;min-width:44px;text-align:center}
   .pageJumpGroup{display:flex;align-items:center;gap:5px}
   .jump{width:108px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;text-align:center}
-  .toggler{ position:fixed; right:12px; top:12px; background:#111; color:#fff; border:none; border-radius:10px; padding:8px 10px; cursor:pointer; z-index:21 }
+  .toggler{ position:fixed; right:12px; top:12px; width:var(--compactW);height:var(--compactW);background:#111;color:#fff;border:none;border-radius:10px;padding:0;cursor:pointer;z-index:45;font-size:20px;touch-action:manipulation }
+  .compactRail{position:fixed;width:var(--compactW);display:none;flex-direction:column;gap:6px;z-index:44}
+  .compactRail.visible{display:flex}
+  .readerCompactRail{right:12px;top:64px;bottom:12px;overflow-y:auto;scrollbar-width:none}
+  .readerCompactRail::-webkit-scrollbar,.annotationCompactRail::-webkit-scrollbar{display:none}
+  .compactButton{width:var(--compactW);height:var(--compactW);min-height:var(--compactW);padding:0;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#111;display:inline-flex;align-items:center;justify-content:center;font-size:20px;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.1);touch-action:manipulation;cursor:pointer;position:relative}
+  .compactButton svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+  .compactButton.selected,.compactButton[aria-pressed="true"]{background:#111;color:#fff;border-color:#111}
+  .compactButton:disabled{opacity:.4;cursor:not-allowed}
+  .compactButtonBlack{background:#111;color:#fff;border-color:#111}
+  .compactPageInput{width:var(--compactW);height:var(--compactW);padding:2px;border:1px solid #94a3b8;border-radius:10px;background:#fff;text-align:center;font:700 13px/1 system-ui,Arial;box-shadow:0 3px 10px rgba(0,0,0,.1)}
+  .compactZoomValue{font-size:11px;font-weight:700}
+  .compactDivider{height:1px;min-height:1px;background:#cbd5e1;margin:1px 5px}
   #zoomSlider{ appearance:none; height:6px; border-radius:999px; background:#e5e7eb; width:160px; margin-left:8px; }
   #zoomSlider::-webkit-slider-thumb{ appearance:none; width:16px; height:16px; border-radius:999px; background:#111; cursor:pointer; }
   #zoomSlider::-moz-range-thumb{ width:16px; height:16px; border-radius:999px; background:#111; cursor:pointer }
@@ -107,6 +119,7 @@
   /* fenêtre des annotations */
   .annotationPopup{position:fixed;right:294px;top:116px;width:310px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#fff;border:1px solid #d1d5db;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:14px;z-index:40;display:none;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
   .annotationPopup.open{display:block}
+  .annotationPopup.open.compact-hidden{display:none}
   .annotationPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px -6px 12px;padding:6px;cursor:var(--cursor-hand-open);user-select:none;touch-action:none}
   .annotationPopup.dragging .annotationPopupHeader{cursor:var(--cursor-hand-closed)}
   .annotationPopupTitle{font-size:17px;font-weight:700}
@@ -127,6 +140,14 @@
   .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
   .annotationHistoryButton svg{width:20px;height:20px;display:block;stroke:currentColor}
   .annotationHistoryButton.selected{background:#111;color:#fff;border-color:#111}
+  .annotationCompactToggleRow{display:flex;justify-content:flex-end;margin-top:12px}
+  .annotationCompactToggle{width:var(--compactW);height:var(--compactW);padding:0;border-radius:10px;background:#111;color:#fff;border-color:#111;font-size:20px;display:inline-flex;align-items:center;justify-content:center}
+  .annotationCompactRail{left:12px;top:64px;bottom:12px;overflow-y:auto;z-index:42}
+  .annotationCompactRail .annotationTool{min-height:var(--compactW);font-family:inherit;justify-content:center;gap:0}
+  .compactColorButton::after{content:"";position:absolute;right:4px;bottom:4px;width:10px;height:10px;border-radius:50%;background:var(--annotationCompactColor,#ffe100);border:1px solid rgba(0,0,0,.35)}
+  .compactColorPalette{position:fixed;left:64px;top:116px;display:none;gap:8px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:43}
+  .compactColorPalette.open{display:flex}
+  .compactColorPalette .colorChoice{width:30px;height:30px;margin:0}
   body.annotation-erase .dr{cursor:crosshair}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
   .emptyBookMessage{min-height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center;color:#374151}
@@ -246,6 +267,21 @@
   <div class="mascot"><img src="./mascotte.png" alt="Mascotte FMttn" draggable="false" /></div>
 </aside>
 
+<nav id="readerCompactRail" class="compactRail readerCompactRail" aria-label="Outils de lecture compacts" aria-hidden="true">
+  <button id="compactToc" class="compactButton" title="Table des matières" aria-label="Table des matières"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+  <input id="compactPageJump" class="compactPageInput" type="text" inputmode="numeric" placeholder="n°" title="Numéro de page" aria-label="Numéro de page" />
+  <div class="compactDivider" aria-hidden="true"></div>
+  <button id="compactZoomOut" class="compactButton" title="Diminuer le zoom" aria-label="Diminuer le zoom">−</button>
+  <div id="compactZoomValue" class="compactButton compactZoomValue" title="Niveau de zoom" aria-label="Niveau de zoom">100%</div>
+  <button id="compactZoomIn" class="compactButton" title="Augmenter le zoom" aria-label="Augmenter le zoom">+</button>
+  <button id="compactFitWidth" class="compactButton" title="Adapter à la largeur" aria-label="Adapter à la largeur"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/></svg></button>
+  <div class="compactDivider" aria-hidden="true"></div>
+  <button id="compactLocalCorrections" class="compactButton" title="Activer ou désactiver les corrections locales" aria-label="Activer ou désactiver les corrections locales" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></button>
+  <button id="compactCorrectionUndo" class="compactButton" title="Annuler la dernière correction locale" aria-label="Annuler la dernière correction locale" disabled>↶</button>
+  <button id="compactOpenAnnotations" class="compactButton" title="Créer des annotations" aria-label="Créer des annotations"><span aria-hidden="true">✎</span></button>
+  <button id="compactLinksToggle" class="compactButton" title="Activer ou désactiver les liens" aria-label="Activer ou désactiver les liens" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg></button>
+</nav>
+
 <div id="annotationPopup" class="annotationPopup" role="dialog" aria-modal="false" aria-labelledby="annotationPopupTitle">
   <div class="annotationPopupHeader">
     <div id="annotationPopupTitle" class="annotationPopupTitle">Annotations</div>
@@ -281,6 +317,33 @@
     <button id="annotationEraser" class="btn annotationHistoryButton" title="Gomme : supprimer une annotation" aria-label="Activer la gomme pour supprimer une annotation" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 15.5 8.8-8.8a2.2 2.2 0 0 1 3.1 0l1.9 1.9a2.2 2.2 0 0 1 0 3.1l-7.8 7.8H7.7l-3.2-3.2a.6.6 0 0 1 0-.8Z"/><path d="m10.2 9.8 4 4M10.5 19.5H20"/></svg></button>
     <button id="annotationClearAll" class="btn annotationHistoryButton" title="Effacer toutes les annotations" aria-label="Effacer toutes les annotations" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.8c0-.44.36-.8.8-.8h4.4c.44 0 .8.36.8.8V7M7 7l.7 12.2c.03.45.4.8.85.8h6.9c.45 0 .82-.35.85-.8L18 7M10 10.5v6M14 10.5v6"/></svg></button>
   </div>
+  <div class="annotationCompactToggleRow">
+    <button id="collapseAnnotations" class="btn annotationCompactToggle" title="Réduire les annotations" aria-label="Réduire le menu des annotations">☰</button>
+  </div>
+</div>
+
+<nav id="annotationCompactRail" class="compactRail annotationCompactRail" aria-label="Annotations compactes" aria-hidden="true">
+  <button id="expandAnnotations" class="compactButton compactButtonBlack" title="Afficher le menu complet des annotations" aria-label="Afficher le menu complet des annotations">☰</button>
+  <button id="compactAnnotationColor" class="compactButton compactColorButton" title="Choisir la couleur" aria-label="Choisir la couleur" aria-expanded="false"><span aria-hidden="true">●</span></button>
+  <button class="compactButton annotationTool" data-tool="select" title="Sélectionner ou déplacer" aria-label="Sélectionner ou déplacer"><span aria-hidden="true">↖</span></button>
+  <button class="compactButton annotationTool" data-tool="highlight" title="Surligneur" aria-label="Surligneur"><span aria-hidden="true">▰</span></button>
+  <button class="compactButton annotationTool" data-tool="freehand" title="Dessin libre" aria-label="Dessin libre"><span aria-hidden="true">✎</span></button>
+  <button class="compactButton annotationTool" data-tool="rectangle" title="Rectangle" aria-label="Rectangle"><span aria-hidden="true">▭</span></button>
+  <button class="compactButton annotationTool" data-tool="ellipse" title="Cercle" aria-label="Cercle"><span aria-hidden="true">◯</span></button>
+  <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><span aria-hidden="true">╱</span></button>
+  <button class="compactButton annotationTool" data-tool="text" title="Texte" aria-label="Texte"><span aria-hidden="true">T</span></button>
+  <div class="compactDivider" aria-hidden="true"></div>
+  <button id="compactAnnotationUndo" class="compactButton" title="Annuler" aria-label="Annuler la dernière annotation" disabled>↶</button>
+  <button id="compactAnnotationRedo" class="compactButton" title="Rétablir" aria-label="Rétablir la dernière annotation" disabled>↷</button>
+  <button id="compactAnnotationEraser" class="compactButton" title="Gomme" aria-label="Activer la gomme" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.5 15.5 8.8-8.8a2.2 2.2 0 0 1 3.1 0l1.9 1.9a2.2 2.2 0 0 1 0 3.1l-7.8 7.8H7.7l-3.2-3.2a.6.6 0 0 1 0-.8Z"/><path d="m10.2 9.8 4 4M10.5 19.5H20"/></svg></button>
+</nav>
+
+<div id="compactColorPalette" class="compactColorPalette" role="group" aria-label="Couleur de l'annotation compacte">
+  <button class="colorChoice selected" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
+  <button class="colorChoice" data-color="#ef4444" style="background:#ef4444" title="Rouge" aria-label="Rouge"></button>
+  <button class="colorChoice" data-color="#22c55e" style="background:#22c55e" title="Vert" aria-label="Vert"></button>
+  <button class="colorChoice" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
+  <button class="colorChoice" data-color="#000000" style="background:#000000" title="Noir" aria-label="Noir"></button>
 </div>
 
 <div id="annotationFilesPopup" class="annotationPopup backupPopup" role="dialog" aria-modal="false" aria-labelledby="annotationFilesPopupTitle">
@@ -389,6 +452,18 @@ const $annotationClearAll=document.getElementById('annotationClearAll');
 const $annotationHint=document.getElementById('annotationHint');
 const $annotationFontSize=document.getElementById('annotationFontSize');
 const $side=document.getElementById('side'), $toggleSide=document.getElementById('toggleSide');
+const $readerCompactRail=document.getElementById('readerCompactRail');
+const $compactToc=document.getElementById('compactToc');
+const $compactPageJump=document.getElementById('compactPageJump');
+const $compactZoomOut=document.getElementById('compactZoomOut'), $compactZoomIn=document.getElementById('compactZoomIn');
+const $compactZoomValue=document.getElementById('compactZoomValue'), $compactFitWidth=document.getElementById('compactFitWidth');
+const $compactLocalCorrections=document.getElementById('compactLocalCorrections'), $compactCorrectionUndo=document.getElementById('compactCorrectionUndo');
+const $compactOpenAnnotations=document.getElementById('compactOpenAnnotations'), $compactLinksToggle=document.getElementById('compactLinksToggle');
+const $collapseAnnotations=document.getElementById('collapseAnnotations'), $expandAnnotations=document.getElementById('expandAnnotations');
+const $annotationCompactRail=document.getElementById('annotationCompactRail');
+const $compactAnnotationColor=document.getElementById('compactAnnotationColor'), $compactColorPalette=document.getElementById('compactColorPalette');
+const $compactAnnotationUndo=document.getElementById('compactAnnotationUndo'), $compactAnnotationRedo=document.getElementById('compactAnnotationRedo');
+const $compactAnnotationEraser=document.getElementById('compactAnnotationEraser');
 const $slider=document.getElementById('zoomSlider');
 const $linksToggle=document.getElementById('linksToggle');
 const $linkEditor=document.getElementById('linkEditor');
@@ -415,11 +490,15 @@ let activeAnnotationConstraintRefresh=null;
 let annotationClipboard=null;
 let annotationPointerClient=null;
 let annotationEraseMode=false;
+let annotationPopupCompact=false;
 
 function updateHistoryButtons(){
   $undo.disabled=correctionHistoryStack.length===0;
+  $compactCorrectionUndo.disabled=correctionHistoryStack.length===0;
   $annotationUndo.disabled=annotationHistoryStack.length===0;
   $annotationRedo.disabled=annotationRedoStack.length===0;
+  $compactAnnotationUndo.disabled=annotationHistoryStack.length===0;
+  $compactAnnotationRedo.disabled=annotationRedoStack.length===0;
   $annotationClearAll.disabled=!pages.some(p=>p.annotations?.length);
 }
 function recordCorrectionHistory(entry){
@@ -706,6 +785,7 @@ function applyZoom(){
     spacerBox.style.height=(landscapeMode?spacerW:spacerH)+'px';
   }
   $zoomVal.textContent=`${zoomPct}%`;
+  $compactZoomValue.textContent=`${zoomPct}%`;
   if($slider) $slider.value=String(zoomPct);
   updateInlineTextEditorScale();
   updatePanState();
@@ -750,7 +830,8 @@ function syncPageUI(){
   $pageJump.dataset.displayedNumbers=JSON.stringify(numbers);
   $pageJump.value=layout==='2up' && numbers.length>1
     ? `${numbers[0]} – ${numbers[1]}`
-    : (numbers[0]||'');
+    : (numbers.length?numbers[0]:'');
+  $compactPageJump.value=numbers.length?numbers[0]:'';
 }
 function goToEnteredPage(){
   const entered=($pageJump.value.match(/\d+/g)||[]).map(Number);
@@ -770,6 +851,12 @@ function goToEnteredPage(){
   const lastBookPage=Math.max(0,pages.length-FRONT_MATTER_PAGES);
   if(Number.isInteger(n) && n>=0 && n<=lastBookPage) gotoIndex(bookPageToIndex(n));
   else syncPageUI();
+}
+function goToCompactEnteredPage(){
+  const n=parseInt($compactPageJump.value,10);
+  if(!Number.isInteger(n)){ syncPageUI(); return; }
+  $pageJump.value=String(n);
+  goToEnteredPage();
 }
 function gotoIndex(target){
   const cards=cardsReal(); target = clamp(target,0,cards.length-1);
@@ -981,6 +1068,8 @@ function toggleLinks(on){
   }
   $linksToggle.textContent=linksVisible?'Désactiver les liens':'Activer les liens';
   $linksToggle.classList.toggle('btn-dark',linksVisible);
+  $compactLinksToggle.classList.toggle('selected',linksVisible);
+  $compactLinksToggle.setAttribute('aria-pressed',String(linksVisible));
   updateLinksInteractivity();
 }
 function toggleDrawMode(on){
@@ -992,9 +1081,13 @@ function toggleDrawMode(on){
     linkDrawMode=false;
     $linksToggle.textContent='Activer les liens';
     $linksToggle.classList.remove('btn-dark');
+    $compactLinksToggle.classList.remove('selected');
+    $compactLinksToggle.setAttribute('aria-pressed','false');
   }
   $toggleRect.textContent='Locales : ' + (drawMode?'ON':'OFF');
   $toggleRect.classList.toggle('btn-dark',drawMode);
+  $compactLocalCorrections.classList.toggle('selected',drawMode);
+  $compactLocalCorrections.setAttribute('aria-pressed',String(drawMode));
   updateLinksInteractivity();
 }
 
@@ -1014,6 +1107,9 @@ function setAnnotationEraseMode(on){
   $annotationEraser.classList.toggle('selected',annotationEraseMode);
   $annotationEraser.setAttribute('aria-pressed',String(annotationEraseMode));
   $annotationEraser.setAttribute('aria-label',annotationEraseMode?'Désactiver la gomme':'Activer la gomme pour supprimer une annotation');
+  $compactAnnotationEraser.classList.toggle('selected',annotationEraseMode);
+  $compactAnnotationEraser.setAttribute('aria-pressed',String(annotationEraseMode));
+  $compactAnnotationEraser.setAttribute('aria-label',annotationEraseMode?'Désactiver la gomme':'Activer la gomme');
   $annotationHint.textContent=annotationEraseMode
     ?'Gomme activée : touche une annotation pour la supprimer. Touche de nouveau la gomme pour quitter.'
     :(annotationTool?TOOL_HINTS[annotationTool]:'Choisis une couleur, puis un outil.');
@@ -1029,6 +1125,8 @@ function setAnnotationTool(tool){
     linkDrawMode=false;
     $linksToggle.textContent='Activer les liens';
     $linksToggle.classList.remove('btn-dark');
+    $compactLinksToggle.classList.remove('selected');
+    $compactLinksToggle.setAttribute('aria-pressed','false');
     if($linkDraw) $linkDraw.textContent='Tracer la zone du lien';
   }
   document.body.classList.toggle('annotation-enabled',!!annotationTool);
@@ -1063,7 +1161,10 @@ function placeAnnotationPopupInWindow(){
 function openAnnotationPopup(){
   if($annotationFilesPopup.classList.contains('open')) closeAnnotationFilesPopup();
   $annotationPopup.classList.add('open');
+  setAnnotationPopupCompact(false);
   $openAnnotations.classList.add('btn-view-active');
+  $compactOpenAnnotations.classList.add('selected');
+  $compactOpenAnnotations.setAttribute('aria-pressed','true');
   $openAnnotations.setAttribute('aria-expanded','true');
   $openAnnotations.setAttribute('aria-pressed','true');
   annotationFontSize=DEFAULT_TEXT_FONT_PX;
@@ -1075,10 +1176,23 @@ function openAnnotationPopup(){
 function closeAnnotationPopup(){
   if(pendingTextAnnotation) finishInlineTextEditor(true);
   setAnnotationTool(null);
-  $annotationPopup.classList.remove('open','dragging');
+  setAnnotationPopupCompact(false);
+  $annotationPopup.classList.remove('open','dragging','compact-hidden');
   $openAnnotations.classList.remove('btn-view-active');
+  $compactOpenAnnotations.classList.remove('selected');
+  $compactOpenAnnotations.setAttribute('aria-pressed','false');
   $openAnnotations.setAttribute('aria-expanded','false');
   $openAnnotations.setAttribute('aria-pressed','false');
+}
+function setAnnotationPopupCompact(compact){
+  annotationPopupCompact=!!compact&&$annotationPopup.classList.contains('open');
+  $annotationPopup.classList.toggle('compact-hidden',annotationPopupCompact);
+  $annotationCompactRail.classList.toggle('visible',annotationPopupCompact);
+  $annotationCompactRail.setAttribute('aria-hidden',String(!annotationPopupCompact));
+  if(!annotationPopupCompact){
+    $compactColorPalette.classList.remove('open');
+    $compactAnnotationColor.setAttribute('aria-expanded','false');
+  }
 }
 function keepAnnotationFilesPopupInWindow(left,top){
   const margin=8;
@@ -2712,7 +2826,10 @@ window.addEventListener('load', async ()=>{
   let collapsed=false; const setCollapsed=c=>{
     collapsed=c;
     $side.classList.toggle('collapsed',c);
-    document.documentElement.style.setProperty('--panelW', c?'0px':'270px');
+    $readerCompactRail.classList.toggle('visible',c);
+    $readerCompactRail.setAttribute('aria-hidden',String(!c));
+    $toggleSide.setAttribute('aria-expanded',String(!c));
+    document.documentElement.style.setProperty('--panelW', c?'44px':'270px');
     requestAnimationFrame(()=>{ refreshFitWidthPct(); updatePanState(); });
   };
   $toggleSide.addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
@@ -2738,6 +2855,7 @@ window.addEventListener('load', async ()=>{
   loadLinksFromJson();
   toggleLinks(LINK_EDITOR);
   $linksToggle.addEventListener('click',()=>toggleLinks(!linksVisible));
+  $compactLinksToggle.addEventListener('click',()=>toggleLinks(!linksVisible));
 
   if(LINK_EDITOR){
     $linkEditor.classList.add('active');
@@ -2779,8 +2897,15 @@ window.addEventListener('load', async ()=>{
   document.getElementById('zoomOut').addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
   document.getElementById('fitWidth').addEventListener('click',fitWidth);
   document.getElementById('zoomSlider').addEventListener('input', e=>{ zoomPct=clamp(parseInt(e.target.value,10), MIN_PCT, MAX_PCT); applyZoom(); });
+  $compactZoomIn.addEventListener('click',()=>{ zoomPct=clamp(zoomPct+10,MIN_PCT,MAX_PCT); applyZoom(); });
+  $compactZoomOut.addEventListener('click',()=>{ zoomPct=clamp(zoomPct-10,MIN_PCT,MAX_PCT); applyZoom(); });
+  $compactFitWidth.addEventListener('click',fitWidth);
 
   $tocButton.addEventListener('click',()=>{
+    toggleLinks(true);
+    gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE));
+  });
+  $compactToc.addEventListener('click',()=>{
     toggleLinks(true);
     gotoIndex(bookPageToIndex(TABLE_OF_CONTENTS_PAGE));
   });
@@ -2790,6 +2915,14 @@ window.addEventListener('load', async ()=>{
       e.preventDefault();
       goToEnteredPage();
       $pageJump.select();
+    }
+  });
+  $compactPageJump.addEventListener('change',goToCompactEnteredPage);
+  $compactPageJump.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      goToCompactEnteredPage();
+      $compactPageJump.select();
     }
   });
   document.addEventListener('pointermove',e=>{
@@ -2845,6 +2978,7 @@ window.addEventListener('load', async ()=>{
   window.addEventListener('scroll',scheduleNavFromScroll,{passive:true});
 
   document.getElementById('toggleRect').addEventListener('click',()=>{ toggleDrawMode(!drawMode); });
+  $compactLocalCorrections.addEventListener('click',()=>toggleDrawMode(!drawMode));
   document.getElementById('clear').addEventListener('click',()=>{
     for(const p of pages){ p.zones=[]; p.showAll=false; redrawOverlay(p); redrawDraft(p,null); }
     correctionHistoryStack.length=0;
@@ -2856,10 +2990,29 @@ window.addEventListener('load', async ()=>{
   enableAnnotationFilesPopupDragging();
   $openAnnotations.setAttribute('aria-expanded','false');
   $openAnnotations.setAttribute('aria-pressed','false');
+  $compactOpenAnnotations.setAttribute('aria-pressed','false');
   $openAnnotationFiles.setAttribute('aria-expanded','false');
   $openAnnotationFiles.setAttribute('aria-pressed','false');
   $openAnnotations.addEventListener('click',openAnnotationPopup);
+  $compactOpenAnnotations.addEventListener('click',openAnnotationPopup);
   $closeAnnotations.addEventListener('click',closeAnnotationPopup);
+  $collapseAnnotations.addEventListener('click',()=>setAnnotationPopupCompact(true));
+  $expandAnnotations.addEventListener('click',()=>{
+    setAnnotationPopupCompact(false);
+    requestAnimationFrame(placeAnnotationPopupInWindow);
+  });
+  $compactAnnotationColor.addEventListener('click',e=>{
+    e.stopPropagation();
+    const open=!$compactColorPalette.classList.contains('open');
+    $compactColorPalette.classList.toggle('open',open);
+    $compactAnnotationColor.setAttribute('aria-expanded',String(open));
+  });
+  $compactColorPalette.addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('pointerdown',e=>{
+    if(e.target.closest('#compactAnnotationColor,#compactColorPalette')) return;
+    $compactColorPalette.classList.remove('open');
+    $compactAnnotationColor.setAttribute('aria-expanded','false');
+  });
   $openAnnotationFiles.addEventListener('click',openAnnotationFilesPopup);
   $closeAnnotationFiles.addEventListener('click',closeAnnotationFilesPopup);
   $exportAnnotations.addEventListener('click',exportAnnotationsFile);
@@ -2870,7 +3023,10 @@ window.addEventListener('load', async ()=>{
   $importAnnotationsFile.addEventListener('change',()=>importAnnotationsFile($importAnnotationsFile.files?.[0]));
   document.querySelectorAll('.colorChoice').forEach(button=>button.addEventListener('click',()=>{
     annotationColor=button.dataset.color;
-    document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice===button));
+    document.querySelectorAll('.colorChoice').forEach(choice=>choice.classList.toggle('selected',choice.dataset.color===annotationColor));
+    $compactAnnotationColor.style.setProperty('--annotationCompactColor',annotationColor);
+    $compactColorPalette.classList.remove('open');
+    $compactAnnotationColor.setAttribute('aria-expanded','false');
     if(annotationTool==='select'&&selectedAnnotation){
       const {p}=selectedAnnotation;
       const annotations=selectedAnnotationList();
@@ -2922,9 +3078,17 @@ window.addEventListener('load', async ()=>{
     setAnnotationTool(button.dataset.tool);
   }));
   $undo.addEventListener('click',undoLocalCorrection);
+  $compactCorrectionUndo.addEventListener('click',undoLocalCorrection);
   $annotationUndo.addEventListener('click',doAnnotationUndo);
   $annotationRedo.addEventListener('click',doAnnotationRedo);
+  $compactAnnotationUndo.addEventListener('click',doAnnotationUndo);
+  $compactAnnotationRedo.addEventListener('click',doAnnotationRedo);
   $annotationEraser.addEventListener('click',()=>{
+    const shouldEnable=!annotationEraseMode;
+    if(shouldEnable&&annotationTool!=='select') setAnnotationTool('select');
+    setAnnotationEraseMode(shouldEnable);
+  });
+  $compactAnnotationEraser.addEventListener('click',()=>{
     const shouldEnable=!annotationEraseMode;
     if(shouldEnable&&annotationTool!=='select') setAnnotationTool('select');
     setAnnotationEraseMode(shouldEnable);
