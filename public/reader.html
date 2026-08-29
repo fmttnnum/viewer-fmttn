@@ -56,7 +56,7 @@
 
   /* calques */
   .ov{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1}
-  .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3}
+  .dr{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:3; touch-action:none; -webkit-user-select:none; user-select:none}
   .dr:focus{outline:none}
 
   /* couche des liens : coordonnées en px natifs + scale CSS */
@@ -81,7 +81,7 @@
   .title{font-weight:800}
   .section{border:1px solid #e5e7eb;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
   .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-  .btn{ position:relative; border:1px solid #d1d5db; background:#fff; padding:6px 10px; border-radius:8px; cursor:pointer; user-select:none; overflow:hidden; }
+  .btn{ position:relative; border:1px solid #d1d5db; background:#fff; padding:6px 10px; border-radius:8px; cursor:pointer; user-select:none; overflow:hidden; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   .btn:disabled{opacity:.45;cursor:not-allowed}
   .btn-dark{background:#111;color:#fff;border-color:#111}
   .btn-amber{background:#ffd166;border-color:#e9b44e}
@@ -148,6 +148,11 @@
   .inlineTextEditor{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;outline:none;resize:none;overflow:hidden;font-family:Calibri,"Carlito","Segoe UI",sans-serif;color:inherit;caret-color:currentColor;box-sizing:border-box}
   .inlineTextEditor::placeholder{color:currentColor;opacity:.48}
   @media (max-width:760px){.annotationPopup{right:12px;top:64px}}
+  @media (pointer:coarse){
+    .annotationTool{min-height:44px}
+    .colorChoice{width:40px;height:40px}
+    .annotationHistoryButton{width:44px;height:44px}
+  }
 
   /* on masque la légende numérotée */
   .num{display:none!important}
@@ -1784,6 +1789,7 @@ function attachDrawHandlers(p){
   let draft=null;
   let selectionGesture=null;
   let lastDraftPoint=null;
+  let activePointerId=null;
   const toLocal=e=>pagePointFromClient(p,e.clientX,e.clientY);
   function clearTransferPreview(gesture){
     if(!gesture?.previewPage) return;
@@ -1849,10 +1855,13 @@ function attachDrawHandlers(p){
   }
   function down(e){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
+    if(activePointerId!==null) return;
     if(e.button!==undefined&&e.button!==0) return;
     e.preventDefault();
     activeAnnotationConstraintRefresh=null;
     if(pendingTextAnnotation){ finishInlineTextEditor(true); return; }
+    activePointerId=e.pointerId;
+    try{p.canDr.setPointerCapture(e.pointerId);}catch(_){}
     const start=toLocal(e);
     if(annotationTool==='select'){
       const currentAnnotations=selectedAnnotation?.p===p?selectedAnnotationList():[];
@@ -1904,6 +1913,8 @@ function attachDrawHandlers(p){
     redrawDraft(p,draft);
   }
   function move(e){
+    if(activePointerId===null||e.pointerId!==activePointerId) return;
+    e.preventDefault();
     if(selectionGesture){
       if(selectionGesture.marquee){
         const point=toLocal(e);
@@ -1991,7 +2002,13 @@ function attachDrawHandlers(p){
     updateDraftFromPoint(m,e.shiftKey);
     redrawDraft(p,draft);
   }
-  function up(){
+  function up(e){
+    if(activePointerId===null||(e&&e.pointerId!==activePointerId)) return;
+    const completedPointerId=activePointerId;
+    activePointerId=null;
+    try{
+      if(p.canDr.hasPointerCapture?.(completedPointerId)) p.canDr.releasePointerCapture(completedPointerId);
+    }catch(_){}
     activeAnnotationConstraintRefresh=null;
     lastDraftPoint=null;
     if(selectionGesture){
@@ -2112,15 +2129,20 @@ function attachDrawHandlers(p){
     }
     redrawDraft(p,null);
   }
-  p.canDr.addEventListener('mousedown',down);
-  p.canDr.addEventListener('mousemove',e=>{
+  p.canDr.addEventListener('pointerdown',down);
+  p.canDr.addEventListener('pointermove',e=>{
+    if(activePointerId!==null){
+      move(e);
+      return;
+    }
+    if(e.pointerType!=='mouse') return;
     if(annotationTool!=='select'||selectionGesture||pendingTextAnnotation){
       p.canDr.classList.remove('annotation-hover-movable');
       return;
     }
     p.canDr.classList.toggle('annotation-hover-movable',!!findAnnotationAt(p,toLocal(e)));
   });
-  p.canDr.addEventListener('mouseleave',()=>{
+  p.canDr.addEventListener('pointerleave',()=>{
     if(!selectionGesture) p.canDr.classList.remove('annotation-hover-movable');
   });
   p.canDr.addEventListener('keydown',e=>{
@@ -2138,8 +2160,9 @@ function attachDrawHandlers(p){
     selectAnnotation(p,annotation);
     openInlineTextEditor(p,annotation,false);
   });
-  window.addEventListener('mousemove',move);
-  window.addEventListener('mouseup',up);
+  p.canDr.addEventListener('pointerup',up);
+  p.canDr.addEventListener('pointercancel',up);
+  p.canDr.addEventListener('lostpointercapture',up);
 }
 
 /*** PRÉCHARGEMENT : corrections ***/
