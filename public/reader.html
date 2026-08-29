@@ -346,6 +346,8 @@ const ROTATION_SNAP_TOLERANCE_DEG = 8;
 const ROTATION_SNAP_ANGLES_DEG = [0,90,180,270];
 const INITIAL_EAGER_DOCUMENTS = 1;
 const BACKGROUND_DOCUMENT_DELAY_MS = 1200;
+const COARSE_PAGE_MEMORY_RADIUS = 2;
+const FINE_PAGE_MEMORY_RADIUS = 8;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
@@ -776,6 +778,7 @@ function gotoIndex(target){
   requestDocument(targetPage,'high');
   syncPageUI();
   cards[target].scrollIntoView({behavior:'auto',block:'start'});
+  managePageMemory(currentIndex);
   // La navigation reste prioritaire : le chargement de la correction ne doit
   // jamais empêcher le saut vers la page demandée.
   if(drawMode || pages[0]?.showAll) void ensureVisibleCorrections('high');
@@ -799,6 +802,51 @@ function goto(by){
   cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const y=r.top+window.scrollY; const dy=Math.abs(y-top); if(dy<best.dy) best={idx:i,dy}; });
   gotoIndex(best.idx+by);
 }
+function pageMemoryRadius(){
+  const coarse=window.matchMedia?.('(pointer:coarse)').matches;
+  if(coarse) return layout==='2up'?3:COARSE_PAGE_MEMORY_RADIUS;
+  return FINE_PAGE_MEMORY_RADIUS;
+}
+function shouldRetainPageResources(p,center=currentIndex){
+  const index=pages.indexOf(p);
+  return index>=0&&Math.abs(index-center)<=pageMemoryRadius();
+}
+function ensurePageCanvasMemory(p){
+  if(!p?.w||!p?.h) return;
+  if(p.canOv.width===p.w&&p.canOv.height===p.h&&p.canDr.width===p.w&&p.canDr.height===p.h) return;
+  p.canOv.width=p.canDr.width=p.w;
+  p.canOv.height=p.canDr.height=p.h;
+  redrawOverlay(p);
+  redrawDraft(p,null);
+}
+function releasePageResources(p){
+  if(!p) return;
+  if(p.canOv.width!==1||p.canOv.height!==1){
+    p.canOv.width=1;
+    p.canOv.height=1;
+  }
+  if(p.canDr.width!==1||p.canDr.height!==1){
+    p.canDr.width=1;
+    p.canDr.height=1;
+  }
+  if(p.corrPendingImage){
+    try{p.corrPendingImage.removeAttribute('src');}catch(_){}
+    p.corrPendingImage=null;
+    p.corrLoadPromise=null;
+  }
+  if(p.imgCorr){
+    try{p.imgCorr.removeAttribute('src');}catch(_){}
+    p.imgCorr=null;
+    p.corrLoadPromise=null;
+  }
+}
+function managePageMemory(center=currentIndex){
+  const radius=pageMemoryRadius();
+  pages.forEach((p,index)=>{
+    if(Math.abs(index-center)<=radius) ensurePageCanvasMemory(p);
+    else releasePageResources(p);
+  });
+}
 function updateNavFromScroll(){
   const cards=cardsReal(); let best={idx:0,vis:0}; const vh=window.innerHeight;
   cards.forEach((el,i)=>{ const r=el.getBoundingClientRect(); const vis=Math.max(0,Math.min(r.bottom,vh)-Math.max(r.top,0)); if(vis>best.vis) best={idx:i,vis}; });
@@ -810,10 +858,10 @@ function updateNavFromScroll(){
   if(layout==='2up' && cards[currentIndex] && cards[best.idx]){
     const currentSpread=cards[currentIndex].closest('.spread');
     const bestSpread=cards[best.idx].closest('.spread');
-    if(currentSpread && currentSpread===bestSpread){ syncPageUI(); return; }
+    if(currentSpread && currentSpread===bestSpread){ managePageMemory(currentIndex); syncPageUI(); return; }
   }
 
-  currentIndex=best.idx; syncPageUI();
+  currentIndex=best.idx; managePageMemory(currentIndex); syncPageUI();
   if(drawMode || pages[0]?.showAll) ensureVisibleCorrections('high');
 }
 let lastNavScrollY=window.scrollY, navScrollFrame=0;
@@ -1823,6 +1871,9 @@ function attachDrawHandlers(p){
   let twoFingerTouchNavigation=false;
   let lastTwoFingerCenterY=0;
   let lastTwoFingerMoveTime=0;
+  let pendingTwoFingerCenterY=0;
+  let twoFingerScrollFrame=0;
+  let smoothedTwoFingerVelocity=0;
   let annotationDragClientPoint=null;
   let annotationAutoScrollFrame=0;
   let annotationAutoScrollEdgeStartedAt=0;
@@ -1837,7 +1888,30 @@ function attachDrawHandlers(p){
       centerY:(first.y+second.y)/2
     };
   };
+  function cancelTwoFingerScrollFrame(){
+    if(twoFingerScrollFrame) cancelAnimationFrame(twoFingerScrollFrame);
+    twoFingerScrollFrame=0;
+  }
+  function runTwoFingerScroll(timestamp){
+    twoFingerScrollFrame=0;
+    if(!twoFingerTouchNavigation||touchGesturePoints.size<2) return;
+    const elapsed=Math.max(1,Math.min(80,timestamp-lastTwoFingerMoveTime));
+    const fingerDelta=lastTwoFingerCenterY-pendingTwoFingerCenterY;
+    const rawVelocity=Math.abs(fingerDelta)/elapsed;
+    smoothedTwoFingerVelocity=smoothedTwoFingerVelocity
+      ?smoothedTwoFingerVelocity*.58+rawVelocity*.42
+      :rawVelocity;
+    const scrollMultiplier=smoothedTwoFingerVelocity>=0.9?3.2:smoothedTwoFingerVelocity>=0.5?2.5:smoothedTwoFingerVelocity>=0.25?1.8:1.15;
+    window.scrollBy(0,fingerDelta*scrollMultiplier);
+    lastTwoFingerCenterY=pendingTwoFingerCenterY;
+    lastTwoFingerMoveTime=timestamp;
+  }
+  function scheduleTwoFingerScroll(centerY){
+    pendingTwoFingerCenterY=centerY;
+    if(!twoFingerScrollFrame) twoFingerScrollFrame=requestAnimationFrame(runTwoFingerScroll);
+  }
   function cancelActiveTouchWorkForTwoFingerNavigation(){
+    cancelTwoFingerScrollFrame();
     stopAnnotationAutoScroll();
     eraserCandidate=null;
     if(selectionGesture){
@@ -1984,6 +2058,7 @@ function attachDrawHandlers(p){
   }
   function down(e){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
+    ensurePageCanvasMemory(p);
     const navigationTouch=e.pointerType==='touch'&&(drawMode||!!annotationTool)&&!linkDrawMode;
     if(navigationTouch){
       touchGesturePoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -1993,8 +2068,10 @@ function attachDrawHandlers(p){
         cancelActiveTouchWorkForTwoFingerNavigation();
         twoFingerTouchNavigation=true;
         const metrics=twoFingerMetrics();
+        pendingTwoFingerCenterY=metrics?.centerY||0;
         lastTwoFingerCenterY=metrics?.centerY||0;
-        lastTwoFingerMoveTime=Number.isFinite(e.timeStamp)?e.timeStamp:performance.now();
+        lastTwoFingerMoveTime=performance.now();
+        smoothedTwoFingerVelocity=0;
         return;
       }
     }
@@ -2304,16 +2381,7 @@ function attachDrawHandlers(p){
       if(twoFingerTouchNavigation){
         e.preventDefault();
         const metrics=twoFingerMetrics();
-        if(metrics){
-          const now=Number.isFinite(e.timeStamp)?e.timeStamp:performance.now();
-          const elapsed=Math.max(1,Math.min(80,now-lastTwoFingerMoveTime));
-          const fingerDelta=lastTwoFingerCenterY-metrics.centerY;
-          const fingerVelocity=Math.abs(fingerDelta)/elapsed;
-          const scrollMultiplier=fingerVelocity>=0.9?3.2:fingerVelocity>=0.5?2.5:fingerVelocity>=0.25?1.8:1.15;
-          window.scrollBy(0,fingerDelta*scrollMultiplier);
-          lastTwoFingerCenterY=metrics.centerY;
-          lastTwoFingerMoveTime=now;
-        }
+        if(metrics) scheduleTwoFingerScroll(metrics.centerY);
         return;
       }
     }
@@ -2358,8 +2426,11 @@ function attachDrawHandlers(p){
       try{
         if(p.canDr.hasPointerCapture?.(e.pointerId)) p.canDr.releasePointerCapture(e.pointerId);
       }catch(_){}
+      if(touchGesturePoints.size<2) cancelTwoFingerScrollFrame();
       if(touchGesturePoints.size===0){
         twoFingerTouchNavigation=false;
+        pendingTwoFingerCenterY=0;
+        smoothedTwoFingerVelocity=0;
         lastTwoFingerCenterY=0;
         lastTwoFingerMoveTime=0;
       }
@@ -2394,25 +2465,32 @@ function ensureCorrectionLoaded(p,priority='auto'){
 
   p.corrLoadPromise=new Promise(resolve=>{
     const corr=new Image();
+    p.corrPendingImage=corr;
     corr.decoding='async';
     corr.fetchPriority=priority;
     let settled=false;
     const finish=ok=>{
       if(settled) return;
       settled=true;
-      if(ok){
+      if(p.corrPendingImage!==corr){
+        resolve(false);
+        return;
+      }
+      p.corrPendingImage=null;
+      const retained=ok&&shouldRetainPageResources(p);
+      if(retained){
         p.imgCorr=corr;
         p.corrNW=corr.naturalWidth||0;
         p.corrNH=corr.naturalHeight||0;
       }else{
-        // Autorise une nouvelle tentative si le réseau a interrompu le
-        // premier chargement de cette correction.
+        try{corr.removeAttribute('src');}catch(_){}
+        // Autorise un nouveau chargement lorsque cette page redevient visible.
         p.corrLoadPromise=null;
       }
       corrReadyCount++;
       updateRevealButton();
-      redrawOverlay(p);
-      resolve(ok);
+      if(retained) redrawOverlay(p);
+      resolve(retained);
     };
     corr.addEventListener('load',async()=>{
       try{ if(typeof corr.decode==='function') await corr.decode(); }catch(_){ }
@@ -2476,13 +2554,18 @@ function makePage(n){
   box.appendChild(canDr);
 
   const savedAnnotations=Array.isArray(storedAnnotations[String(n)]) ? storedAnnotations[String(n)] : [];
-  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],annotations:savedAnnotations,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer,docUrl:docPath(n),corrUrl:corrPath(n),docRequested:false,corrLoadPromise:null};
+  const p={idx:n,box,imgDoc:img,imgCorr:null,canOv,canDr,w:0,h:0,zones:[],annotations:savedAnnotations,showAll:false,elPage:el,corrNW:0,corrNH:0,linksLayer,docUrl:docPath(n),corrUrl:corrPath(n),docRequested:false,corrLoadPromise:null,corrPendingImage:null};
   pages.push(p);
 
   img.addEventListener('error',()=>{ el.classList.add('missing'); const warn=document.createElement('div'); warn.className='badge warn'; warn.textContent='Fichier manquant'; el.appendChild(warn); });
   img.addEventListener('load',()=>{ 
     p.w=img.naturalWidth; p.h=img.naturalHeight;
-    canOv.width=canDr.width=p.w; canOv.height=canDr.height=p.h;
+    if(shouldRetainPageResources(p)){
+      canOv.width=canDr.width=p.w;
+      canOv.height=canDr.height=p.h;
+    }else{
+      releasePageResources(p);
+    }
     if(!firstPageWidth){
       firstPageWidth=p.w;
       firstPageHeight=p.h;
@@ -2513,7 +2596,7 @@ function makePage(n){
   return el;
 }
 
-function mount1up(){ $viewport.className='flow-1up'; $viewport.innerHTML=''; for(const p of pages){ $viewport.appendChild(p.elPage); } }
+function mount1up(){ $viewport.className='flow-1up'; $viewport.innerHTML=''; for(const p of pages){ $viewport.appendChild(p.elPage); } managePageMemory(currentIndex); }
 function mount2up(){
   $viewport.className='flow-2up'; $viewport.innerHTML='';
   if (bookMode){
@@ -2522,6 +2605,7 @@ function mount2up(){
   } else {
     for (let i=0;i<pages.length;i+=2){ const sp=document.createElement('div'); sp.className='spread'; sp.appendChild(pages[i].elPage); if(pages[i+1]) sp.appendChild(pages[i+1].elPage); $viewport.appendChild(sp); }
   }
+  managePageMemory(currentIndex);
 }
 function updateLayoutButtons(){
   const onePageActive=layout==='1up';
