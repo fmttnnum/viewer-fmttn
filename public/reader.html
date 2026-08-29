@@ -962,7 +962,6 @@ const TOOL_HINTS={
 };
 function setAnnotationEraseMode(on){
   annotationEraseMode=!!on&&annotationTool==='select';
-  clearSelectedAnnotation();
   document.body.classList.toggle('annotation-erase',annotationEraseMode);
   $annotationEraser.classList.toggle('selected',annotationEraseMode);
   $annotationEraser.setAttribute('aria-pressed',String(annotationEraseMode));
@@ -1822,6 +1821,9 @@ function attachDrawHandlers(p){
   let activePointerId=null;
   const touchGesturePoints=new Map();
   let twoFingerTouchNavigation=false;
+  let twoFingerGestureMode='none';
+  let twoFingerStartCenterY=0;
+  let twoFingerStartDistance=0;
   let lastTwoFingerCenterY=0;
   let lastTwoFingerDistance=0;
   let annotationDragClientPoint=null;
@@ -1995,6 +1997,9 @@ function attachDrawHandlers(p){
         cancelActiveTouchWorkForTwoFingerNavigation();
         twoFingerTouchNavigation=true;
         const metrics=twoFingerMetrics();
+        twoFingerGestureMode=annotationTool?'pending':'scroll';
+        twoFingerStartCenterY=metrics?.centerY||0;
+        twoFingerStartDistance=metrics?.distance||0;
         lastTwoFingerCenterY=metrics?.centerY||0;
         lastTwoFingerDistance=metrics?.distance||0;
         return;
@@ -2174,7 +2179,11 @@ function attachDrawHandlers(p){
     if(eraserCandidate){
       const candidate=eraserCandidate;
       eraserCandidate=null;
-      if(!candidate.moved&&candidate.annotation) eraseAnnotation(p,candidate.annotation);
+      if(!candidate.moved&&candidate.annotation){
+        const selected=selectedAnnotation?.p===p?selectedAnnotationList():[];
+        if(selected.includes(candidate.annotation)) deleteSelectedAnnotation();
+        else eraseAnnotation(p,candidate.annotation);
+      }
       return;
     }
     if(selectionGesture){
@@ -2303,9 +2312,26 @@ function attachDrawHandlers(p){
         e.preventDefault();
         const metrics=twoFingerMetrics();
         if(metrics){
-          let targetScrollY=window.scrollY+(lastTwoFingerCenterY-metrics.centerY);
-          window.scrollTo(0,Math.max(0,targetScrollY));
-          if(annotationTool&&lastTwoFingerDistance>0&&metrics.distance>0){
+          if(twoFingerGestureMode==='pending'){
+            const scrollIntent=Math.abs(metrics.centerY-twoFingerStartCenterY);
+            const pinchIntent=Math.abs(metrics.distance-twoFingerStartDistance);
+            if(pinchIntent>=14&&pinchIntent>scrollIntent*1.15){
+              twoFingerGestureMode='pinch';
+            }else if(scrollIntent>=8){
+              twoFingerGestureMode='scroll';
+            }else{
+              return;
+            }
+          }
+          if(twoFingerGestureMode==='scroll'){
+            const fingerDelta=lastTwoFingerCenterY-metrics.centerY;
+            const fingerSpeed=Math.abs(fingerDelta);
+            const scrollMultiplier=fingerSpeed>=22?2.2:fingerSpeed>=10?1.65:fingerSpeed>=4?1.25:1;
+            window.scrollBy(0,fingerDelta*scrollMultiplier);
+            lastTwoFingerCenterY=metrics.centerY;
+            return;
+          }
+          if(twoFingerGestureMode==='pinch'&&lastTwoFingerDistance>0&&metrics.distance>0){
             const previousZoom=zoomPct;
             const nextZoom=Math.round(clamp(previousZoom*(metrics.distance/lastTwoFingerDistance),MIN_PCT,MAX_PCT)*10)/10;
             if(Math.abs(nextZoom-previousZoom)>=0.05){
@@ -2316,13 +2342,11 @@ function attachDrawHandlers(p){
               zoomPct=nextZoom;
               applyZoom();
               const afterRect=p.canDr.getBoundingClientRect();
-              targetScrollY=window.scrollY+(afterRect.top+anchorRatioY*afterRect.height-metrics.centerY);
+              const targetScrollY=window.scrollY+(afterRect.top+anchorRatioY*afterRect.height-metrics.centerY);
+              window.scrollTo(0,Math.max(0,targetScrollY));
               lastTwoFingerDistance=metrics.distance;
             }
-          }else{
-            lastTwoFingerDistance=metrics.distance;
           }
-          window.scrollTo(0,Math.max(0,targetScrollY));
           lastTwoFingerCenterY=metrics.centerY;
         }
         return;
@@ -2371,6 +2395,9 @@ function attachDrawHandlers(p){
       }catch(_){}
       if(touchGesturePoints.size===0){
         twoFingerTouchNavigation=false;
+        twoFingerGestureMode='none';
+        twoFingerStartCenterY=0;
+        twoFingerStartDistance=0;
         lastTwoFingerCenterY=0;
         lastTwoFingerDistance=0;
       }
