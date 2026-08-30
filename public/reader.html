@@ -26,6 +26,7 @@
   body.pan-enabled .linksLayer{cursor:var(--cursor-hand-open)}
   body.pan-enabled .link-hotspot{cursor:pointer}
   body.pan-enabled #viewport{touch-action:none;will-change:transform}
+  body.zoom-pannable #viewport{will-change:transform;transform-style:preserve-3d;backface-visibility:hidden}
   body.is-panning,
   body.is-panning #viewport,
   body.is-panning .page,
@@ -39,7 +40,7 @@
   body.annotation-select .dr.annotation-hover-movable{cursor:var(--cursor-hand-open)}
   body.annotation-select.annotation-dragging .dr{cursor:var(--cursor-hand-closed)!important}
 
-  .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
+  .wrap{ width:100%; margin:0; padding:12px; padding-left:calc(var(--compactW) + 24px); padding-right:calc(var(--panelW) + 24px) }
   #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center;overscroll-behavior:none;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none }
   .flow-1up{display:block}
   .flow-1up .page{margin:0 0 var(--gap) 0;}
@@ -517,10 +518,15 @@ let tabletTwoFingerCandidate=false;
 let tabletTwoFingerLastEndedAt=0;
 const activePointerCancels=new Set();
 const tabletTouchPoints=new Map();
+let tabletTwoFingerAxis=null;
+let tabletTwoFingerLastCenterX=0;
 let tabletTwoFingerLastCenterY=0;
+let tabletTwoFingerPendingCenterX=0;
 let tabletTwoFingerPendingCenterY=0;
 let tabletTwoFingerScrollFrame=0;
 let tabletTwoFingerTargetScrollY=0;
+let tabletTwoFingerTargetPanX=0;
+let tabletTwoFingerPanLimit=0;
 
 function tabletGestureTarget(target){
   return target instanceof Element&&!!target.closest('#viewport,.page,.box,canvas');
@@ -533,15 +539,15 @@ function tabletTwoFingerNavigationIntent(){
   if(points.length<2) return false;
   const movements=points.map(point=>({dx:point.x-point.startX,dy:point.y-point.startY}));
   const [first,second]=movements;
-  const bothMoved=Math.abs(first.dy)>6&&Math.abs(second.dy)>6;
-  const sameVerticalDirection=first.dy*second.dy>0;
-  const verticalDistance=Math.abs(first.dy)+Math.abs(second.dy);
-  const horizontalDistance=Math.abs(first.dx)+Math.abs(second.dx);
-  return bothMoved&&sameVerticalDirection&&verticalDistance>horizontalDistance*.85;
+  const verticalIntent=Math.abs(first.dy)>7&&Math.abs(second.dy)>7&&first.dy*second.dy>0;
+  const horizontalIntent=Math.abs(first.dx)>7&&Math.abs(second.dx)>7&&first.dx*second.dx>0;
+  return verticalIntent||horizontalIntent;
 }
-function tabletTwoFingerCenterY(){
+function tabletTwoFingerCenter(){
   const points=[...tabletTouchPoints.values()].slice(0,2);
-  return points.length===2?(points[0].y+points[1].y)/2:null;
+  return points.length===2
+    ?{x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2}
+    :null;
 }
 function stopTabletTwoFingerScroll(){
   if(tabletTwoFingerScrollFrame) cancelAnimationFrame(tabletTwoFingerScrollFrame);
@@ -550,24 +556,40 @@ function stopTabletTwoFingerScroll(){
 function runTabletTwoFingerScroll(){
   tabletTwoFingerScrollFrame=0;
   if(!tabletTwoFingerActive||tabletTouchPoints.size<2) return;
-  const fingerDelta=tabletTwoFingerLastCenterY-tabletTwoFingerPendingCenterY;
-  tabletTwoFingerTargetScrollY=clamp(tabletTwoFingerTargetScrollY+fingerDelta,0,Math.max(0,document.documentElement.scrollHeight-window.innerHeight));
-  if(Math.abs(fingerDelta)>.05) window.scrollTo(0,tabletTwoFingerTargetScrollY);
+  const dx=tabletTwoFingerPendingCenterX-tabletTwoFingerLastCenterX;
+  const dy=tabletTwoFingerPendingCenterY-tabletTwoFingerLastCenterY;
+  if(!tabletTwoFingerAxis&&Math.hypot(dx,dy)>1){
+    tabletTwoFingerAxis=Math.abs(dx)>Math.abs(dy)?'horizontal':'vertical';
+  }
+  if(tabletTwoFingerAxis==='horizontal'){
+    tabletTwoFingerTargetPanX=clamp(tabletTwoFingerTargetPanX+dx,-tabletTwoFingerPanLimit,tabletTwoFingerPanLimit);
+    panX=tabletTwoFingerTargetPanX;
+    applyHorizontalPan();
+  }else if(tabletTwoFingerAxis==='vertical'){
+    tabletTwoFingerTargetScrollY=clamp(tabletTwoFingerTargetScrollY-dy,0,Math.max(0,document.documentElement.scrollHeight-window.innerHeight));
+    window.scrollTo(0,tabletTwoFingerTargetScrollY);
+  }
+  tabletTwoFingerLastCenterX=tabletTwoFingerPendingCenterX;
   tabletTwoFingerLastCenterY=tabletTwoFingerPendingCenterY;
 }
-function scheduleTabletTwoFingerScroll(centerY){
-  tabletTwoFingerPendingCenterY=centerY;
+function scheduleTabletTwoFingerScroll(center){
+  tabletTwoFingerPendingCenterX=center.x;
+  tabletTwoFingerPendingCenterY=center.y;
   if(!tabletTwoFingerScrollFrame) tabletTwoFingerScrollFrame=requestAnimationFrame(runTabletTwoFingerScroll);
 }
 function beginTabletTwoFingerNavigation(){
-  const centerY=tabletTwoFingerCenterY();
-  if(centerY===null) return;
+  const center=tabletTwoFingerCenter();
+  if(!center) return;
   for(const cancel of [...activePointerCancels]) cancel();
   tabletTwoFingerCandidate=false;
   tabletTwoFingerActive=true;
-  tabletTwoFingerLastCenterY=centerY;
-  tabletTwoFingerPendingCenterY=centerY;
+  tabletTwoFingerAxis=null;
+  tabletTwoFingerLastCenterX=tabletTwoFingerPendingCenterX=center.x;
+  tabletTwoFingerLastCenterY=tabletTwoFingerPendingCenterY=center.y;
   tabletTwoFingerTargetScrollY=window.scrollY;
+  tabletTwoFingerTargetPanX=panX;
+  tabletTwoFingerPanLimit=horizontalPanLimit();
+  document.body.classList.add('tablet-two-finger-active');
   if(pageMemoryTimer){ clearTimeout(pageMemoryTimer); pageMemoryTimer=0; }
   stopTabletTwoFingerScroll();
 }
@@ -575,6 +597,8 @@ function endTabletTwoFingerNavigation(){
   const wasActive=tabletTwoFingerActive;
   if(wasActive) tabletTwoFingerLastEndedAt=performance.now();
   tabletTwoFingerActive=false;
+  tabletTwoFingerAxis=null;
+  document.body.classList.remove('tablet-two-finger-active');
   stopTabletTwoFingerScroll();
   if(wasActive) requestAnimationFrame(()=>updateNavFromScroll());
 }
@@ -617,8 +641,8 @@ function installTabletGestureController(){
     const previous=tabletTouchPoints.get(e.pointerId);
     tabletTouchPoints.set(e.pointerId,{...previous,x:e.clientX,y:e.clientY});
     if(tabletTwoFingerActive){
-      const centerY=tabletTwoFingerCenterY();
-      if(centerY!==null) scheduleTabletTwoFingerScroll(centerY);
+      const center=tabletTwoFingerCenter();
+      if(center) scheduleTabletTwoFingerScroll(center);
       e.preventDefault();
     }else if(tabletTwoFingerCandidate&&tabletTwoFingerNavigationIntent()){
       beginTabletTwoFingerNavigation();
@@ -638,9 +662,17 @@ function installTabletGestureController(){
     if(tabletTouchPoints.size<2) endTabletTwoFingerNavigation();
     if(tabletTouchPoints.size<2){
       tabletTwoFingerCandidate=false;
-      activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
+      // Le relâchement du doigt qui dessine arrive d'abord ici (capture), puis
+      // sur le canevas. On conserve la contrainte jusqu'à l'enregistrement de
+      // la forme pour éviter qu'elle reprenne sa forme libre au dernier instant.
+      if(e.pointerId!==globalActiveTouchPointerId){
+        activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
+      }
     }
-    if(tabletTouchPoints.size===0) tabletTwoFingerLastCenterY=0;
+    if(tabletTouchPoints.size===0){
+      tabletTwoFingerLastCenterX=0;
+      tabletTwoFingerLastCenterY=0;
+    }
   };
   document.addEventListener('pointerup',finishTouch,{capture:true});
   document.addEventListener('pointercancel',finishTouch,{capture:true});
@@ -900,6 +932,7 @@ function updatePanState(){
   const shouldEnable=zoomAllowsPan && !drawMode && !annotationTool && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
+  document.body.classList.toggle('zoom-pannable',zoomAllowsPan);
   if(!zoomAllowsPan){
     isPanning=false;
     document.body.classList.remove('is-panning');
@@ -977,9 +1010,11 @@ function attachPanHandlers(){
     if(!isPanning || e.pointerId!==pointerId) return;
     const dx=e.clientX-startX, dy=e.clientY-startY;
     if(!gestureAxis&&Math.hypot(dx,dy)>8){
-      if(Math.abs(dy)>Math.abs(dx)*1.35) gestureAxis='vertical';
-      else if(Math.abs(dx)>Math.abs(dy)*1.35) gestureAxis='horizontal';
-      else gestureAxis='free';
+      // Sur tablette, un geste choisit un seul axe. La page ne tremble donc
+      // plus horizontalement pendant un défilement vertical (et inversement).
+      gestureAxis=pointerType==='mouse'
+        ?'free'
+        :(Math.abs(dx)>Math.abs(dy)?'horizontal':'vertical');
     }
     if(!gestureAxis){ e.preventDefault(); return; }
     pendingPanX=gestureAxis==='vertical'?startPanX:clamp(startPanX+dx,-dragLimit,dragLimit);
@@ -1229,6 +1264,9 @@ function updateNavFromScroll(){
 }
 let lastNavScrollY=window.scrollY, navScrollFrame=0;
 function scheduleNavFromScroll(){
+  // Pendant un geste à deux doigts, mesurer les 164 pages à chaque image
+  // ralentissait Safari. La page active est recalculée une seule fois à la fin.
+  if(tabletTwoFingerActive) return;
   const y=window.scrollY;
   if(y===lastNavScrollY) return;
   lastNavScrollY=y;
@@ -3121,7 +3159,12 @@ function makePage(n){
       }
       refreshFitWidthPct();
     }
-    if(initializesBook) applyZoom();
+    if(initializesBook){
+      // Au premier affichage, la liseuse occupe directement toute la largeur
+      // réellement disponible entre les deux barres compactes.
+      zoomPct=refreshFitWidthPct();
+      applyZoom();
+    }
     else applyZoomToPage(p);
     redrawOverlay(p); redrawDraft(p,null);
     attachDrawHandlers(p);
@@ -3261,7 +3304,7 @@ window.addEventListener('load', async ()=>{
     document.documentElement.style.setProperty('--panelW', c?'44px':'270px');
     requestAnimationFrame(()=>{ refreshFitWidthPct(); updatePanState(); });
   };
-  $toggleSide.addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
+  $toggleSide.addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(true);
   setAnnotationPopupCompact(false);
   updateCompactAnnotationColor();
   renderCompactShapeMemory();
@@ -3461,6 +3504,9 @@ window.addEventListener('load', async ()=>{
   $compactAnnotationForms.addEventListener('click',e=>{
     e.stopPropagation();
     const open=!$compactFormsPalette.classList.contains('open');
+    // Le bouton principal active immédiatement la forme qu'il représente.
+    // Le petit sous-menu reste disponible pour en choisir une autre.
+    setAnnotationTool(lastAnnotationShape||'rectangle');
     $compactColorPalette.classList.remove('open');
     $compactAnnotationColor.setAttribute('aria-expanded','false');
     $compactFormsPalette.classList.toggle('open',open);
