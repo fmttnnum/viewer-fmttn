@@ -17,6 +17,7 @@
   body{ margin:0; font:14px/1.45 system-ui,Arial; background:var(--bg); color:var(--ink);
         overflow-y:scroll; overflow-x:hidden; -webkit-touch-callout:none; }
   body.pan-enabled{overflow-x:hidden}
+  body.tablet-focus-fullscreen{overscroll-behavior:none;-webkit-overflow-scrolling:touch}
   body.pan-enabled #viewport,
   body.pan-enabled .page,
   body.pan-enabled .box,
@@ -105,6 +106,7 @@
   .compactButton.selected,.compactButton[aria-pressed="true"]{background:#111;color:#fff;border-color:#111}
   .compactButton:disabled{opacity:.4;cursor:not-allowed}
   .compactButtonBlack{background:#111;color:#fff;border-color:#111}
+  .annotationModeToggle{font-size:11px;font-weight:800;letter-spacing:.02em}
   .compactPageInput{width:var(--compactW);height:var(--compactW);padding:2px;border:1px solid #94a3b8;border-radius:10px;background:#fff;text-align:center;font:700 13px/1 system-ui,Arial;box-shadow:0 3px 10px rgba(0,0,0,.1)}
   .compactZoomValue{font-size:11px;font-weight:700}
   .compactDivider{height:1px;min-height:1px;background:#cbd5e1;margin:1px 5px}
@@ -325,7 +327,7 @@
 
 <nav id="annotationCompactRail" class="compactRail annotationCompactRail" aria-label="Annotations compactes" aria-hidden="true">
   <button id="expandAnnotations" class="compactButton compactButtonBlack" title="Afficher le menu complet des annotations" aria-label="Afficher le menu complet des annotations">☰</button>
-  <button id="compactOpenAnnotations" class="compactButton" title="Activer les annotations" aria-label="Activer les annotations"><span aria-hidden="true">✎</span></button>
+  <button id="compactOpenAnnotations" class="compactButton annotationModeToggle" title="Activer les annotations" aria-label="Activer les annotations"><span aria-hidden="true">OFF</span></button>
   <button id="compactAnnotationColor" class="compactButton compactColorButton" title="Choisir la couleur" aria-label="Choisir la couleur" aria-expanded="false"><span aria-hidden="true">●</span></button>
   <button class="compactButton annotationTool" data-tool="select" title="Sélectionner ou déplacer" aria-label="Sélectionner ou déplacer"><span aria-hidden="true">↖</span></button>
   <button class="compactButton compactUsesAnnotationColor annotationTool" data-tool="highlight" title="Surligneur" aria-label="Surligneur"><span aria-hidden="true">▰</span></button>
@@ -420,6 +422,11 @@ const FINE_PAGE_MEMORY_RADIUS = 8;
 
 /*** STATE & REFS ***/
 let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#3b82f6', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
+let lastAnnotationShape=null;
+try{
+  const savedShape=localStorage.getItem('fmttn:lastAnnotationShape');
+  if(['rectangle','ellipse','line'].includes(savedShape)) lastAnnotationShape=savedShape;
+}catch(_){}
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = true;
@@ -499,9 +506,14 @@ let annotationPointerClient=null;
 let annotationEraseMode=false;
 let annotationPopupCompact=false;
 let globalActivePenPointerId=null;
+let globalActiveTouchPointerId=null;
+let globalActiveTouchHasMoved=false;
+let globalActiveTouchStartX=0;
+let globalActiveTouchStartY=0;
 let suppressPalmTouchesUntil=0;
 const penConstraintTouches=new Set();
 let tabletTwoFingerActive=false;
+let tabletTwoFingerCandidate=false;
 let tabletTwoFingerLastEndedAt=0;
 const activePointerCancels=new Set();
 const tabletTouchPoints=new Map();
@@ -514,7 +526,18 @@ function tabletGestureTarget(target){
   return target instanceof Element&&!!target.closest('#viewport,.page,.box,canvas');
 }
 function annotationTouchConstraintActive(){
-  return penConstraintTouches.size>0;
+  return penConstraintTouches.size>0||(!!annotationTool&&tabletTwoFingerCandidate&&tabletTouchPoints.size>=2);
+}
+function tabletTwoFingerNavigationIntent(){
+  const points=[...tabletTouchPoints.values()].slice(0,2);
+  if(points.length<2) return false;
+  const movements=points.map(point=>({dx:point.x-point.startX,dy:point.y-point.startY}));
+  const [first,second]=movements;
+  const bothMoved=Math.abs(first.dy)>6&&Math.abs(second.dy)>6;
+  const sameVerticalDirection=first.dy*second.dy>0;
+  const verticalDistance=Math.abs(first.dy)+Math.abs(second.dy);
+  const horizontalDistance=Math.abs(first.dx)+Math.abs(second.dx);
+  return bothMoved&&sameVerticalDirection&&verticalDistance>horizontalDistance*.85;
 }
 function tabletTwoFingerCenterY(){
   const points=[...tabletTouchPoints.values()].slice(0,2);
@@ -540,20 +563,20 @@ function beginTabletTwoFingerNavigation(){
   const centerY=tabletTwoFingerCenterY();
   if(centerY===null) return;
   for(const cancel of [...activePointerCancels]) cancel();
+  tabletTwoFingerCandidate=false;
   tabletTwoFingerActive=true;
   tabletTwoFingerLastCenterY=centerY;
   tabletTwoFingerPendingCenterY=centerY;
   tabletTwoFingerTargetScrollY=window.scrollY;
   if(pageMemoryTimer){ clearTimeout(pageMemoryTimer); pageMemoryTimer=0; }
-  panX=0;
-  $viewport.style.removeProperty('transform');
   stopTabletTwoFingerScroll();
 }
 function endTabletTwoFingerNavigation(){
-  if(tabletTwoFingerActive) tabletTwoFingerLastEndedAt=performance.now();
+  const wasActive=tabletTwoFingerActive;
+  if(wasActive) tabletTwoFingerLastEndedAt=performance.now();
   tabletTwoFingerActive=false;
   stopTabletTwoFingerScroll();
-  requestAnimationFrame(()=>updateNavFromScroll());
+  if(wasActive) requestAnimationFrame(()=>updateNavFromScroll());
 }
 function installTabletGestureController(){
   document.addEventListener('pointerdown',e=>{
@@ -561,6 +584,7 @@ function installTabletGestureController(){
       if(tabletTouchPoints.size){
         for(const pointerId of tabletTouchPoints.keys()) penConstraintTouches.add(pointerId);
         tabletTouchPoints.clear();
+        tabletTwoFingerCandidate=false;
         endTabletTwoFingerNavigation();
       }
       return;
@@ -573,9 +597,13 @@ function installTabletGestureController(){
       return;
     }
     if(!(drawMode||annotationTool)||linkDrawMode||!tabletGestureTarget(e.target)) return;
-    tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY});
     if(tabletTouchPoints.size>=2){
-      if(!tabletTwoFingerActive) beginTabletTwoFingerNavigation();
+      tabletTwoFingerCandidate=true;
+      if(annotationTool&&globalActiveTouchPointerId!==null&&!globalActiveTouchHasMoved){
+        for(const cancel of [...activePointerCancels]) cancel();
+      }
+      activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
       e.preventDefault();
     }
   },{capture:true});
@@ -586,10 +614,17 @@ function installTabletGestureController(){
       return;
     }
     if(!tabletTouchPoints.has(e.pointerId)) return;
-    tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const previous=tabletTouchPoints.get(e.pointerId);
+    tabletTouchPoints.set(e.pointerId,{...previous,x:e.clientX,y:e.clientY});
     if(tabletTwoFingerActive){
       const centerY=tabletTwoFingerCenterY();
       if(centerY!==null) scheduleTabletTwoFingerScroll(centerY);
+      e.preventDefault();
+    }else if(tabletTwoFingerCandidate&&tabletTwoFingerNavigationIntent()){
+      beginTabletTwoFingerNavigation();
+      e.preventDefault();
+    }else if(tabletTwoFingerCandidate){
+      activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
       e.preventDefault();
     }
   },{capture:true});
@@ -601,6 +636,10 @@ function installTabletGestureController(){
     }
     if(!tabletTouchPoints.delete(e.pointerId)) return;
     if(tabletTouchPoints.size<2) endTabletTwoFingerNavigation();
+    if(tabletTouchPoints.size<2){
+      tabletTwoFingerCandidate=false;
+      activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
+    }
     if(tabletTouchPoints.size===0) tabletTwoFingerLastCenterY=0;
   };
   document.addEventListener('pointerup',finishTouch,{capture:true});
@@ -677,6 +716,12 @@ function updateFullscreenButton(){
 }
 async function toggleFullscreen(){
   try{
+    if(APPLE_TOUCH_DEVICE){
+      tabletFocusFullscreen=!tabletFocusFullscreen;
+      document.body.classList.toggle('tablet-focus-fullscreen',tabletFocusFullscreen);
+      updateFullscreenButton();
+      return;
+    }
     if(currentFullscreenElement()){
       const exit=document.exitFullscreen||document.webkitExitFullscreen;
       if(exit) await exit.call(document);
@@ -855,12 +900,16 @@ function updatePanState(){
   const shouldEnable=zoomAllowsPan && !drawMode && !annotationTool && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
-  if(!shouldEnable){
+  if(!zoomAllowsPan){
     isPanning=false;
     document.body.classList.remove('is-panning');
     panX=0;
     $viewport.style.removeProperty('transform');
   }else{
+    if(!panEnabled){
+      isPanning=false;
+      document.body.classList.remove('is-panning');
+    }
     panX=clamp(panX,-horizontalPanLimit(),horizontalPanLimit());
     applyHorizontalPan();
   }
@@ -883,12 +932,23 @@ function applyHorizontalPan(){
   $viewport.style.transform=`translate3d(${Math.round(panX)}px,0,0)`;
 }
 function attachPanHandlers(){
-  let pointerId=null, startX=0, startY=0, startPanX=0, startScrollY=0, dragLimit=0;
+  let pointerId=null, pointerType=null, startX=0, startY=0, startPanX=0, startScrollY=0, dragLimit=0, gestureAxis=null;
+  let pendingPanX=0, pendingScrollY=0, panFrame=0;
+
+  const flushPan=()=>{
+    panFrame=0;
+    panX=pendingPanX;
+    applyHorizontalPan();
+    window.scrollTo(0,pendingScrollY);
+  };
 
   const stopPan=e=>{
     if(pointerId===null || (e && e.pointerId!==pointerId)) return;
+    if(panFrame){ cancelAnimationFrame(panFrame); flushPan(); }
     if($viewport.hasPointerCapture?.(pointerId)) $viewport.releasePointerCapture(pointerId);
     pointerId=null;
+    pointerType=null;
+    gestureAxis=null;
     isPanning=false;
     document.body.classList.remove('is-panning');
   };
@@ -898,11 +958,15 @@ function attachPanHandlers(){
     if(e.pointerType==='mouse' && e.button!==0) return;
     if(e.target.closest('.link-hotspot')) return;
     pointerId=e.pointerId;
+    pointerType=e.pointerType||'mouse';
     startX=e.clientX;
     startY=e.clientY;
     startPanX=panX;
     startScrollY=window.scrollY;
     dragLimit=horizontalPanLimit();
+    pendingPanX=panX;
+    pendingScrollY=window.scrollY;
+    gestureAxis=pointerType==='mouse'?'free':null;
     isPanning=true;
     document.body.classList.add('is-panning');
     $viewport.setPointerCapture?.(pointerId);
@@ -911,9 +975,16 @@ function attachPanHandlers(){
 
   $viewport.addEventListener('pointermove',e=>{
     if(!isPanning || e.pointerId!==pointerId) return;
-    panX=clamp(startPanX+(e.clientX-startX),-dragLimit,dragLimit);
-    applyHorizontalPan();
-    window.scrollTo(0,startScrollY-(e.clientY-startY));
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    if(!gestureAxis&&Math.hypot(dx,dy)>8){
+      if(Math.abs(dy)>Math.abs(dx)*1.35) gestureAxis='vertical';
+      else if(Math.abs(dx)>Math.abs(dy)*1.35) gestureAxis='horizontal';
+      else gestureAxis='free';
+    }
+    if(!gestureAxis){ e.preventDefault(); return; }
+    pendingPanX=gestureAxis==='vertical'?startPanX:clamp(startPanX+dx,-dragLimit,dragLimit);
+    pendingScrollY=gestureAxis==='horizontal'?startScrollY:startScrollY-dy;
+    if(!panFrame) panFrame=requestAnimationFrame(flushPan);
     e.preventDefault();
   });
   $viewport.addEventListener('pointerup',stopPan);
@@ -953,6 +1024,8 @@ function applyZoom(){
   if(selectedAnnotation) redrawDraft(selectedAnnotation.p,null);
 }
 function setZoomPct(nextZoom){
+  if(annotationTool) setAnnotationTool(null);
+  if(drawMode) toggleDrawMode(false);
   const next=clamp(Math.round(nextZoom),MIN_PCT,MAX_PCT);
   const anchorIndex=clamp(currentIndex,0,Math.max(0,pages.length-1));
   const card=cardsReal()[anchorIndex];
@@ -1328,6 +1401,18 @@ function updateCompactAnnotationColor(){
   document.documentElement.style.setProperty('--annotationCompactColor',value);
   document.documentElement.style.setProperty('--annotationCompactInk',ink);
 }
+function renderCompactShapeMemory(){
+  $compactAnnotationForms.textContent=lastAnnotationShape
+    ?({rectangle:'▭',ellipse:'◯',line:'╱'})[lastAnnotationShape]
+    :'F';
+}
+function updateAnnotationModeToggle(){
+  const active=!!annotationTool;
+  const label=$compactOpenAnnotations.querySelector('span');
+  if(label) label.textContent=active?'ON':'OFF';
+  $compactOpenAnnotations.title=active?'Désactiver les annotations':'Activer les annotations';
+  $compactOpenAnnotations.setAttribute('aria-label',$compactOpenAnnotations.title);
+}
 function setAnnotationTool(tool){
   if(annotationEraseMode) setAnnotationEraseMode(false);
   if(tool!=='select') clearSelectedAnnotation();
@@ -1354,9 +1439,14 @@ function setAnnotationTool(tool){
   $compactOpenAnnotations.classList.toggle('selected',!!annotationTool);
   $compactOpenAnnotations.setAttribute('aria-pressed',String(!!annotationTool));
   const shapeSelected=['rectangle','ellipse','line'].includes(annotationTool);
+  if(shapeSelected){
+    lastAnnotationShape=annotationTool;
+    try{ localStorage.setItem('fmttn:lastAnnotationShape',lastAnnotationShape); }catch(_){}
+  }
   $compactAnnotationForms.classList.toggle('selected',shapeSelected);
   $compactAnnotationForms.setAttribute('aria-pressed',String(shapeSelected));
-  $compactAnnotationForms.textContent=({rectangle:'▭',ellipse:'◯',line:'╱'})[annotationTool]||'F';
+  renderCompactShapeMemory();
+  updateAnnotationModeToggle();
   $compactFormsPalette.classList.remove('open');
   $compactAnnotationForms.setAttribute('aria-expanded','false');
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
@@ -2313,6 +2403,10 @@ function attachDrawHandlers(p){
       globalActivePenPointerId=null;
       suppressPalmTouchesUntil=performance.now()+220;
     }
+    if(canceledPointerType==='touch'&&globalActiveTouchPointerId===canceledPointerId){
+      globalActiveTouchPointerId=null;
+      globalActiveTouchHasMoved=false;
+    }
     draft=null;
     lastDraftPoint=null;
     activeAnnotationConstraintRefresh=null;
@@ -2394,13 +2488,27 @@ function attachDrawHandlers(p){
       draft.y2=constrain ? draft.y : clamp(point.y,0,p.h);
     }else if(draft.kind==='freehand'){
       const last=draft.points[draft.points.length-1];
-      if(!last||Math.hypot(point.x-last.x,point.y-last.y)>.35){
-        const raw={x:clamp(point.x,0,p.w),y:clamp(point.y,0,p.h)};
-        draft.points.push(last?{
-          x:last.x+(raw.x-last.x)*.72,
-          y:last.y+(raw.y-last.y)*.72
-        }:raw);
+      const raw={x:clamp(point.x,0,p.w),y:clamp(point.y,0,p.h)};
+      const previousRaw=draft.lastRawPoint||last;
+      const distance=previousRaw?Math.hypot(raw.x-previousRaw.x,raw.y-previousRaw.y):0;
+      if(!last){
+        draft.points.push(raw);
+      }else if(distance>.35){
+        const steps=clamp(Math.ceil(distance/2.5),1,24);
+        for(let step=1;step<=steps;step++){
+          const ratio=step/steps;
+          const sample={
+            x:previousRaw.x+(raw.x-previousRaw.x)*ratio,
+            y:previousRaw.y+(raw.y-previousRaw.y)*ratio
+          };
+          const prior=draft.points[draft.points.length-1];
+          draft.points.push({
+            x:prior.x+(sample.x-prior.x)*.82,
+            y:prior.y+(sample.y-prior.y)*.82
+          });
+        }
       }
+      draft.lastRawPoint=raw;
     }else if(draft.kind==='line'){
       draft.x2=clamp(point.x,0,p.w);
       draft.y2=constrain ? draft.y1 : clamp(point.y,0,p.h);
@@ -2472,6 +2580,12 @@ function attachDrawHandlers(p){
     if(pendingTextAnnotation){ finishInlineTextEditor(true); return; }
     activePointerId=e.pointerId;
     activePointerType=e.pointerType||null;
+    if(activePointerType==='touch'){
+      globalActiveTouchPointerId=e.pointerId;
+      globalActiveTouchHasMoved=false;
+      globalActiveTouchStartX=e.clientX;
+      globalActiveTouchStartY=e.clientY;
+    }
     activePointerCancels.add(cancelActiveTouchWorkForTwoFingerNavigation);
     try{p.canDr.setPointerCapture(e.pointerId);}catch(_){}
     const start=toLocal(e);
@@ -2524,7 +2638,7 @@ function attachDrawHandlers(p){
       return;
     }
     if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,y2:start.y,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
-    else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],color:annotationColor,width:DRAW_WIDTH_PX};
+    else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],lastRawPoint:start,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool) draft={kind:annotationTool,x:start.x,y:start.y,w:0,h:0,color:annotationColor,widthLine:DRAW_WIDTH_PX};
     else { draft=start; draft.w=0; draft.h=0; }
@@ -2535,6 +2649,9 @@ function attachDrawHandlers(p){
   function move(e){
     if(activePointerId===null||e.pointerId!==activePointerId) return;
     e.preventDefault();
+    if(activePointerType==='touch'&&Math.hypot(e.clientX-globalActiveTouchStartX,e.clientY-globalActiveTouchStartY)>5){
+      globalActiveTouchHasMoved=true;
+    }
     if(eraserCandidate){
       if(Math.hypot(e.clientX-eraserCandidate.startClient.x,e.clientY-eraserCandidate.startClient.y)>10){
         eraserCandidate.moved=true;
@@ -2645,6 +2762,10 @@ function attachDrawHandlers(p){
       if(globalActivePenPointerId===completedPointerId) globalActivePenPointerId=null;
       suppressPalmTouchesUntil=performance.now()+220;
     }
+    if(completedPointerType==='touch'&&globalActiveTouchPointerId===completedPointerId){
+      globalActiveTouchPointerId=null;
+      globalActiveTouchHasMoved=false;
+    }
     try{
       if(p.canDr.hasPointerCapture?.(completedPointerId)) p.canDr.releasePointerCapture(completedPointerId);
     }catch(_){}
@@ -2744,6 +2865,7 @@ function attachDrawHandlers(p){
     }
     if(draft.kind==='freehand'){
       const annotation=draft; draft=null;
+      delete annotation.lastRawPoint;
       annotation.points=smoothFreehandPoints(annotation.points);
       if(annotation.points.length>1) commitAnnotation(p,annotation);
       redrawDraft(p,null); return;
@@ -3142,6 +3264,8 @@ window.addEventListener('load', async ()=>{
   $toggleSide.addEventListener('click',()=>setCollapsed(!collapsed)); setCollapsed(false);
   setAnnotationPopupCompact(false);
   updateCompactAnnotationColor();
+  renderCompactShapeMemory();
+  updateAnnotationModeToggle();
   attachPanHandlers();
   window.addEventListener('resize',()=>{ refreshFitWidthPct(); updatePanState(); },{passive:true});
 
