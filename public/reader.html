@@ -134,7 +134,7 @@
   .annotationTools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .annotationTool{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:40px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
   .annotationToolWide{grid-column:1/-1;justify-content:center}
-  .annotationTool.selected{background:#111;color:#fff;border-color:#111}
+  .annotationTool.selected{background:var(--annotationCompactColor,#3b82f6);color:var(--annotationCompactInk,#111);border-color:var(--annotationCompactColor,#3b82f6)}
   .toolIcon{width:22px;text-align:center;font-size:19px;line-height:1}
   .annotationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
   .annotationHistoryButton{width:44px;height:38px;padding:0;font-size:23px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
@@ -146,11 +146,13 @@
   .annotationCompactRail .annotationTool{min-height:var(--compactW);font-family:inherit;justify-content:center;gap:0}
   .compactColorButton span{color:var(--annotationCompactColor,#3b82f6);font-size:34px;line-height:1}
   .compactFormsButton{font-size:20px;font-weight:700}
-  .compactUsesAnnotationColor{background:var(--annotationCompactColor,#3b82f6)!important;color:var(--annotationCompactInk,#111)!important;border-color:var(--annotationCompactColor,#3b82f6)!important}
+  .compactUsesAnnotationColor{background:#fff!important;color:#111!important;border-color:#cbd5e1!important}
+  .compactUsesAnnotationColor.selected{background:var(--annotationCompactColor,#3b82f6)!important;color:var(--annotationCompactInk,#111)!important;border-color:var(--annotationCompactColor,#3b82f6)!important}
   .compactPopover{position:fixed;height:var(--compactW);display:none;align-items:center;justify-content:center;gap:4px;padding:4px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:47}
   .compactPopover.open{display:flex}
-  .compactColorPalette .colorChoice{width:34px;height:34px;margin:0;border-width:2px}
-  .compactFormsPalette .compactButton{width:34px;height:34px;min-height:34px;border-radius:8px;box-shadow:none;font-size:18px}
+  .compactColorPalette .colorChoice{width:28px;height:28px;margin:0;border-width:2px}
+  .compactFormsPalette .compactButton{width:34px;height:34px;min-height:34px;padding:0;border-radius:8px;box-shadow:none;display:flex;align-items:center;justify-content:center}
+  .compactFormsPalette .compactButton svg{display:block;width:20px;height:20px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   body.annotation-erase .dr{cursor:crosshair}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
   .emptyBookMessage{min-height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center;color:#374151}
@@ -345,9 +347,9 @@
 </div>
 
 <div id="compactFormsPalette" class="compactPopover compactFormsPalette" role="group" aria-label="Formes d'annotation compactes">
-  <button class="compactButton annotationTool" data-tool="rectangle" title="Rectangle" aria-label="Rectangle"><span aria-hidden="true">▭</span></button>
-  <button class="compactButton annotationTool" data-tool="ellipse" title="Cercle" aria-label="Cercle"><span aria-hidden="true">◯</span></button>
-  <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><span aria-hidden="true">╱</span></button>
+  <button class="compactButton annotationTool" data-tool="rectangle" title="Rectangle" aria-label="Rectangle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12"/></svg></button>
+  <button class="compactButton annotationTool" data-tool="ellipse" title="Cercle" aria-label="Cercle"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg></button>
+  <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/></svg></button>
 </div>
 
 <div id="annotationFilesPopup" class="annotationPopup backupPopup" role="dialog" aria-modal="false" aria-labelledby="annotationFilesPopupTitle">
@@ -504,10 +506,9 @@ let tabletTwoFingerLastEndedAt=0;
 const activePointerCancels=new Set();
 const tabletTouchPoints=new Map();
 let tabletTwoFingerLastCenterY=0;
-let tabletTwoFingerLastMoveAt=0;
 let tabletTwoFingerPendingCenterY=0;
-let tabletTwoFingerPendingMoveAt=0;
 let tabletTwoFingerScrollFrame=0;
+let tabletTwoFingerTargetScrollY=0;
 
 function tabletGestureTarget(target){
   return target instanceof Element&&!!target.closest('#viewport,.page,.box,canvas');
@@ -526,18 +527,13 @@ function stopTabletTwoFingerScroll(){
 function runTabletTwoFingerScroll(){
   tabletTwoFingerScrollFrame=0;
   if(!tabletTwoFingerActive||tabletTouchPoints.size<2) return;
-  const elapsed=clamp(tabletTwoFingerPendingMoveAt-tabletTwoFingerLastMoveAt,8,64);
   const fingerDelta=tabletTwoFingerLastCenterY-tabletTwoFingerPendingCenterY;
-  const velocity=Math.abs(fingerDelta)/elapsed;
-  const gain=clamp(1+velocity*1.05,1,2.65);
-  const scrollDelta=clamp(fingerDelta*gain,-150,150);
-  if(Math.abs(scrollDelta)>.05) window.scrollBy({top:scrollDelta,left:0,behavior:'auto'});
+  tabletTwoFingerTargetScrollY=clamp(tabletTwoFingerTargetScrollY+fingerDelta,0,Math.max(0,document.documentElement.scrollHeight-window.innerHeight));
+  if(Math.abs(fingerDelta)>.05) window.scrollTo(0,tabletTwoFingerTargetScrollY);
   tabletTwoFingerLastCenterY=tabletTwoFingerPendingCenterY;
-  tabletTwoFingerLastMoveAt=tabletTwoFingerPendingMoveAt;
 }
-function scheduleTabletTwoFingerScroll(centerY,time){
+function scheduleTabletTwoFingerScroll(centerY){
   tabletTwoFingerPendingCenterY=centerY;
-  tabletTwoFingerPendingMoveAt=time;
   if(!tabletTwoFingerScrollFrame) tabletTwoFingerScrollFrame=requestAnimationFrame(runTabletTwoFingerScroll);
 }
 function beginTabletTwoFingerNavigation(){
@@ -547,14 +543,17 @@ function beginTabletTwoFingerNavigation(){
   tabletTwoFingerActive=true;
   tabletTwoFingerLastCenterY=centerY;
   tabletTwoFingerPendingCenterY=centerY;
-  tabletTwoFingerLastMoveAt=performance.now();
-  tabletTwoFingerPendingMoveAt=tabletTwoFingerLastMoveAt;
+  tabletTwoFingerTargetScrollY=window.scrollY;
+  if(pageMemoryTimer){ clearTimeout(pageMemoryTimer); pageMemoryTimer=0; }
+  panX=0;
+  $viewport.style.removeProperty('transform');
   stopTabletTwoFingerScroll();
 }
 function endTabletTwoFingerNavigation(){
   if(tabletTwoFingerActive) tabletTwoFingerLastEndedAt=performance.now();
   tabletTwoFingerActive=false;
   stopTabletTwoFingerScroll();
+  requestAnimationFrame(()=>updateNavFromScroll());
 }
 function installTabletGestureController(){
   document.addEventListener('pointerdown',e=>{
@@ -590,7 +589,7 @@ function installTabletGestureController(){
     tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(tabletTwoFingerActive){
       const centerY=tabletTwoFingerCenterY();
-      if(centerY!==null) scheduleTabletTwoFingerScroll(centerY,performance.now());
+      if(centerY!==null) scheduleTabletTwoFingerScroll(centerY);
       e.preventDefault();
     }
   },{capture:true});
@@ -756,7 +755,8 @@ function buildAnnotationExport(){
 }
 async function exportAnnotationsFile(){
   const fileName=annotationExportFileName();
-  const blob=new Blob([JSON.stringify(buildAnnotationExport(),null,2)],{type:'application/json'});
+  const contents=JSON.stringify(buildAnnotationExport(),null,2);
+  const blob=new Blob([contents],{type:'application/json'});
   try{
     if(typeof window.showSaveFilePicker==='function'){
       const handle=await window.showSaveFilePicker({
@@ -766,6 +766,20 @@ async function exportAnnotationsFile(){
       const writable=await handle.createWritable();
       await writable.write(blob);
       await writable.close();
+    }else if(typeof navigator.share==='function'&&typeof File==='function'){
+      const file=new File([contents],fileName,{type:'application/json'});
+      if(!navigator.canShare||navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:`Annotations – ${CURRENT_BOOK.title}`});
+      }else{
+        const url=URL.createObjectURL(blob);
+        const link=document.createElement('a');
+        link.href=url;
+        link.download=fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
     }else{
       const url=URL.createObjectURL(blob);
       const link=document.createElement('a');
@@ -841,16 +855,12 @@ function updatePanState(){
   const shouldEnable=zoomAllowsPan && !drawMode && !annotationTool && !linkDrawMode;
   panEnabled=shouldEnable;
   document.body.classList.toggle('pan-enabled',panEnabled);
-  if(!zoomAllowsPan){
+  if(!shouldEnable){
     isPanning=false;
     document.body.classList.remove('is-panning');
     panX=0;
     $viewport.style.removeProperty('transform');
   }else{
-    if(!panEnabled){
-      isPanning=false;
-      document.body.classList.remove('is-panning');
-    }
     panX=clamp(panX,-horizontalPanLimit(),horizontalPanLimit());
     applyHorizontalPan();
   }
@@ -1129,11 +1139,20 @@ function updateNavFromScroll(){
   if(layout==='2up' && cards[currentIndex] && cards[best.idx]){
     const currentSpread=cards[currentIndex].closest('.spread');
     const bestSpread=cards[best.idx].closest('.spread');
-    if(currentSpread && currentSpread===bestSpread){ requestDocumentWindow(currentIndex); schedulePageMemoryManagement(currentIndex); syncPageUI(); return; }
+    if(currentSpread && currentSpread===bestSpread){
+      if(!tabletTwoFingerActive){ requestDocumentWindow(currentIndex); schedulePageMemoryManagement(currentIndex); }
+      syncPageUI();
+      return;
+    }
   }
 
-  currentIndex=best.idx; requestDocumentWindow(currentIndex); schedulePageMemoryManagement(currentIndex); syncPageUI();
-  if(drawMode || pages[0]?.showAll) ensureVisibleCorrections('high');
+  currentIndex=best.idx;
+  if(!tabletTwoFingerActive){
+    requestDocumentWindow(currentIndex);
+    schedulePageMemoryManagement(currentIndex);
+  }
+  syncPageUI();
+  if(!tabletTwoFingerActive&&(drawMode || pages[0]?.showAll)) ensureVisibleCorrections('high');
 }
 let lastNavScrollY=window.scrollY, navScrollFrame=0;
 function scheduleNavFromScroll(){
@@ -1273,6 +1292,7 @@ function toggleDrawMode(on){
   $compactLocalCorrections.classList.toggle('selected',drawMode);
   $compactLocalCorrections.setAttribute('aria-pressed',String(drawMode));
   updateLinksInteractivity();
+  updatePanState();
 }
 
 const TOOL_LABELS={select:'Sélectionner / déplacer',highlight:'Surligneur',freehand:'Dessin libre',rectangle:'Rectangle',ellipse:'Cercle',line:'Ligne',text:'Texte'};
@@ -1341,6 +1361,7 @@ function setAnnotationTool(tool){
   $compactAnnotationForms.setAttribute('aria-expanded','false');
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
+  updatePanState();
 }
 
 function keepAnnotationPopupInWindow(left,top){
@@ -1584,6 +1605,19 @@ function traceSmoothedFreehand(ctx,points){
   }
   const last=points[points.length-1];
   ctx.lineTo(last.x,last.y);
+}
+function smoothFreehandPoints(points){
+  if(!Array.isArray(points)||points.length<3) return points||[];
+  const result=[{...points[0]}];
+  for(let i=1;i<points.length-1;i++){
+    const previous=points[i-1], current=points[i], next=points[i+1];
+    result.push({
+      x:previous.x*.18+current.x*.64+next.x*.18,
+      y:previous.y*.18+current.y*.64+next.y*.18
+    });
+  }
+  result.push({...points[points.length-1]});
+  return result;
 }
 function drawAnnotation(ctx,a){
   if(!a||pendingTextAnnotation?.annotation===a) return;
@@ -2360,8 +2394,12 @@ function attachDrawHandlers(p){
       draft.y2=constrain ? draft.y : clamp(point.y,0,p.h);
     }else if(draft.kind==='freehand'){
       const last=draft.points[draft.points.length-1];
-      if(!last||Math.hypot(point.x-last.x,point.y-last.y)>.75){
-        draft.points.push({x:clamp(point.x,0,p.w),y:clamp(point.y,0,p.h)});
+      if(!last||Math.hypot(point.x-last.x,point.y-last.y)>.35){
+        const raw={x:clamp(point.x,0,p.w),y:clamp(point.y,0,p.h)};
+        draft.points.push(last?{
+          x:last.x+(raw.x-last.x)*.72,
+          y:last.y+(raw.y-last.y)*.72
+        }:raw);
       }
     }else if(draft.kind==='line'){
       draft.x2=clamp(point.x,0,p.w);
@@ -2706,6 +2744,7 @@ function attachDrawHandlers(p){
     }
     if(draft.kind==='freehand'){
       const annotation=draft; draft=null;
+      annotation.points=smoothFreehandPoints(annotation.points);
       if(annotation.points.length>1) commitAnnotation(p,annotation);
       redrawDraft(p,null); return;
     }
