@@ -39,7 +39,7 @@
   body.annotation-select.annotation-dragging .dr{cursor:var(--cursor-hand-closed)!important}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-right:calc(var(--panelW) + 24px) }
-  #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none }
+  #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center;overscroll-behavior:none;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none }
   .flow-1up{display:block}
   .flow-1up .page{margin:0 0 var(--gap) 0;}
   .flow-2up{display:block}
@@ -144,10 +144,12 @@
   .annotationCompactToggle{width:var(--compactW);height:var(--compactW);padding:0;border-radius:10px;background:#111;color:#fff;border-color:#111;font-size:20px;display:inline-flex;align-items:center;justify-content:center}
   .annotationCompactRail{left:12px;top:12px;bottom:12px;overflow-y:auto;z-index:42}
   .annotationCompactRail .annotationTool{min-height:var(--compactW);font-family:inherit;justify-content:center;gap:0}
-  .compactColorButton span{color:var(--annotationCompactColor,#ffe100);font-size:25px;line-height:1}
-  .compactColorPalette{position:fixed;left:64px;top:116px;display:none;gap:8px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:43}
-  .compactColorPalette.open{display:flex}
+  .compactColorButton span{color:var(--annotationCompactColor,#3b82f6);font-size:25px;line-height:1}
+  .compactFormsButton{font-size:9px;font-weight:800;letter-spacing:-.2px}
+  .compactPopover{position:fixed;display:none;align-items:center;gap:8px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:43}
+  .compactPopover.open{display:flex}
   .compactColorPalette .colorChoice{width:30px;height:30px;margin:0}
+  .compactFormsPalette .compactButton{box-shadow:none}
   body.annotation-erase .dr{cursor:crosshair}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
   .emptyBookMessage{min-height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center;color:#374151}
@@ -289,10 +291,10 @@
   </div>
   <div class="annotationLabel">Couleur</div>
   <div class="colorGrid" role="group" aria-label="Couleur de l'annotation">
-    <button class="colorChoice selected" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
+    <button class="colorChoice" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
     <button class="colorChoice" data-color="#ef4444" style="background:#ef4444" title="Rouge" aria-label="Rouge"></button>
     <button class="colorChoice" data-color="#22c55e" style="background:#22c55e" title="Vert" aria-label="Vert"></button>
-    <button class="colorChoice" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
+    <button class="colorChoice selected" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
     <button class="colorChoice" data-color="#000000" style="background:#000000" title="Noir" aria-label="Noir"></button>
   </div>
   <div class="annotationLabel"><label for="annotationFontSize">Taille de police</label></div>
@@ -328,9 +330,7 @@
   <button class="compactButton annotationTool" data-tool="select" title="Sélectionner ou déplacer" aria-label="Sélectionner ou déplacer"><span aria-hidden="true">↖</span></button>
   <button class="compactButton annotationTool" data-tool="highlight" title="Surligneur" aria-label="Surligneur"><span aria-hidden="true">▰</span></button>
   <button class="compactButton annotationTool" data-tool="freehand" title="Dessin libre" aria-label="Dessin libre"><span aria-hidden="true">✎</span></button>
-  <button class="compactButton annotationTool" data-tool="rectangle" title="Rectangle" aria-label="Rectangle"><span aria-hidden="true">▭</span></button>
-  <button class="compactButton annotationTool" data-tool="ellipse" title="Cercle" aria-label="Cercle"><span aria-hidden="true">◯</span></button>
-  <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><span aria-hidden="true">╱</span></button>
+  <button id="compactAnnotationForms" class="compactButton compactFormsButton" title="Choisir une forme" aria-label="Choisir une forme" aria-expanded="false">Formes</button>
   <button class="compactButton annotationTool" data-tool="text" title="Texte" aria-label="Texte"><span aria-hidden="true">T</span></button>
   <div class="compactDivider" aria-hidden="true"></div>
   <button id="compactAnnotationUndo" class="compactButton" title="Annuler" aria-label="Annuler la dernière annotation" disabled>↶</button>
@@ -338,12 +338,18 @@
   <button id="compactAnnotationEraser" class="compactButton" title="Gomme" aria-label="Activer la gomme" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.5 15.5 8.8-8.8a2.2 2.2 0 0 1 3.1 0l1.9 1.9a2.2 2.2 0 0 1 0 3.1l-7.8 7.8H7.7l-3.2-3.2a.6.6 0 0 1 0-.8Z"/><path d="m10.2 9.8 4 4M10.5 19.5H20"/></svg></button>
 </nav>
 
-<div id="compactColorPalette" class="compactColorPalette" role="group" aria-label="Couleur de l'annotation compacte">
-  <button class="colorChoice selected" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
+<div id="compactColorPalette" class="compactPopover compactColorPalette" role="group" aria-label="Couleur de l'annotation compacte">
+  <button class="colorChoice" data-color="#ffe100" style="background:#ffe100" title="Jaune" aria-label="Jaune"></button>
   <button class="colorChoice" data-color="#ef4444" style="background:#ef4444" title="Rouge" aria-label="Rouge"></button>
   <button class="colorChoice" data-color="#22c55e" style="background:#22c55e" title="Vert" aria-label="Vert"></button>
-  <button class="colorChoice" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
+  <button class="colorChoice selected" data-color="#3b82f6" style="background:#3b82f6" title="Bleu" aria-label="Bleu"></button>
   <button class="colorChoice" data-color="#000000" style="background:#000000" title="Noir" aria-label="Noir"></button>
+</div>
+
+<div id="compactFormsPalette" class="compactPopover compactFormsPalette" role="group" aria-label="Formes d'annotation compactes">
+  <button class="compactButton annotationTool" data-tool="rectangle" title="Rectangle" aria-label="Rectangle"><span aria-hidden="true">▭</span></button>
+  <button class="compactButton annotationTool" data-tool="ellipse" title="Cercle" aria-label="Cercle"><span aria-hidden="true">◯</span></button>
+  <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><span aria-hidden="true">╱</span></button>
 </div>
 
 <div id="annotationFilesPopup" class="annotationPopup backupPopup" role="dialog" aria-modal="false" aria-labelledby="annotationFilesPopupTitle">
@@ -413,7 +419,7 @@ const COARSE_PAGE_MEMORY_RADIUS = 2;
 const FINE_PAGE_MEMORY_RADIUS = 8;
 
 /*** STATE & REFS ***/
-let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#ffe100', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
+let layout="1up", bookMode=false, landscapeMode=false, zoomPct=100, drawMode=false, annotationTool=null, annotationColor='#3b82f6', annotationFontSize=DEFAULT_TEXT_FONT_PX, linksVisible=false, linkDrawMode=false;
 let panEnabled=false, isPanning=false, panX=0;
 let fitZoomPct=MAX_PCT;
 let corrReadyCount = 0, revealReady = true;
@@ -462,6 +468,7 @@ const $compactOpenAnnotations=document.getElementById('compactOpenAnnotations'),
 const $collapseAnnotations=document.getElementById('collapseAnnotations'), $expandAnnotations=document.getElementById('expandAnnotations');
 const $annotationCompactRail=document.getElementById('annotationCompactRail');
 const $compactAnnotationColor=document.getElementById('compactAnnotationColor'), $compactColorPalette=document.getElementById('compactColorPalette');
+const $compactAnnotationForms=document.getElementById('compactAnnotationForms'), $compactFormsPalette=document.getElementById('compactFormsPalette');
 const $compactAnnotationUndo=document.getElementById('compactAnnotationUndo'), $compactAnnotationRedo=document.getElementById('compactAnnotationRedo');
 const $compactAnnotationEraser=document.getElementById('compactAnnotationEraser');
 const $slider=document.getElementById('zoomSlider');
@@ -493,7 +500,136 @@ let annotationEraseMode=false;
 let annotationPopupCompact=false;
 let globalActivePenPointerId=null;
 let suppressPalmTouchesUntil=0;
+const penConstraintTouches=new Set();
+let tabletTwoFingerActive=false;
+let tabletTwoFingerLastEndedAt=0;
 const activePointerCancels=new Set();
+const tabletTouchPoints=new Map();
+let tabletTwoFingerLastCenterY=0;
+let tabletTwoFingerLastMoveAt=0;
+let tabletTwoFingerPendingCenterY=0;
+let tabletTwoFingerPendingMoveAt=0;
+let tabletTwoFingerScrollFrame=0;
+
+function tabletGestureTarget(target){
+  return target instanceof Element&&!!target.closest('#viewport,.page,.box,canvas');
+}
+function annotationTouchConstraintActive(){
+  return penConstraintTouches.size>0;
+}
+function tabletTwoFingerCenterY(){
+  const points=[...tabletTouchPoints.values()].slice(0,2);
+  return points.length===2?(points[0].y+points[1].y)/2:null;
+}
+function stopTabletTwoFingerScroll(){
+  if(tabletTwoFingerScrollFrame) cancelAnimationFrame(tabletTwoFingerScrollFrame);
+  tabletTwoFingerScrollFrame=0;
+}
+function runTabletTwoFingerScroll(){
+  tabletTwoFingerScrollFrame=0;
+  if(!tabletTwoFingerActive||tabletTouchPoints.size<2) return;
+  const elapsed=clamp(tabletTwoFingerPendingMoveAt-tabletTwoFingerLastMoveAt,8,64);
+  const fingerDelta=tabletTwoFingerLastCenterY-tabletTwoFingerPendingCenterY;
+  const velocity=Math.abs(fingerDelta)/elapsed;
+  const gain=clamp(1+velocity*1.05,1,2.65);
+  const scrollDelta=clamp(fingerDelta*gain,-150,150);
+  if(Math.abs(scrollDelta)>.05) window.scrollBy({top:scrollDelta,left:0,behavior:'auto'});
+  tabletTwoFingerLastCenterY=tabletTwoFingerPendingCenterY;
+  tabletTwoFingerLastMoveAt=tabletTwoFingerPendingMoveAt;
+}
+function scheduleTabletTwoFingerScroll(centerY,time){
+  tabletTwoFingerPendingCenterY=centerY;
+  tabletTwoFingerPendingMoveAt=time;
+  if(!tabletTwoFingerScrollFrame) tabletTwoFingerScrollFrame=requestAnimationFrame(runTabletTwoFingerScroll);
+}
+function beginTabletTwoFingerNavigation(){
+  const centerY=tabletTwoFingerCenterY();
+  if(centerY===null) return;
+  for(const cancel of [...activePointerCancels]) cancel();
+  tabletTwoFingerActive=true;
+  tabletTwoFingerLastCenterY=centerY;
+  tabletTwoFingerPendingCenterY=centerY;
+  tabletTwoFingerLastMoveAt=performance.now();
+  tabletTwoFingerPendingMoveAt=tabletTwoFingerLastMoveAt;
+  stopTabletTwoFingerScroll();
+}
+function endTabletTwoFingerNavigation(){
+  if(tabletTwoFingerActive) tabletTwoFingerLastEndedAt=performance.now();
+  tabletTwoFingerActive=false;
+  stopTabletTwoFingerScroll();
+}
+function installTabletGestureController(){
+  document.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='pen'){
+      if(tabletTouchPoints.size){
+        for(const pointerId of tabletTouchPoints.keys()) penConstraintTouches.add(pointerId);
+        tabletTouchPoints.clear();
+        endTabletTwoFingerNavigation();
+      }
+      return;
+    }
+    if(e.pointerType!=='touch') return;
+    if(globalActivePenPointerId!==null){
+      penConstraintTouches.add(e.pointerId);
+      activeAnnotationConstraintRefresh?.(true);
+      e.preventDefault();
+      return;
+    }
+    if(!(drawMode||annotationTool)||linkDrawMode||!tabletGestureTarget(e.target)) return;
+    tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(tabletTouchPoints.size>=2){
+      if(!tabletTwoFingerActive) beginTabletTwoFingerNavigation();
+      e.preventDefault();
+    }
+  },{capture:true});
+  document.addEventListener('pointermove',e=>{
+    if(e.pointerType!=='touch') return;
+    if(penConstraintTouches.has(e.pointerId)){
+      e.preventDefault();
+      return;
+    }
+    if(!tabletTouchPoints.has(e.pointerId)) return;
+    tabletTouchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(tabletTwoFingerActive){
+      const centerY=tabletTwoFingerCenterY();
+      if(centerY!==null) scheduleTabletTwoFingerScroll(centerY,performance.now());
+      e.preventDefault();
+    }
+  },{capture:true});
+  const finishTouch=e=>{
+    if(e.pointerType!=='touch') return;
+    if(penConstraintTouches.delete(e.pointerId)){
+      activeAnnotationConstraintRefresh?.(annotationTouchConstraintActive());
+      e.preventDefault();
+    }
+    if(!tabletTouchPoints.delete(e.pointerId)) return;
+    if(tabletTouchPoints.size<2) endTabletTwoFingerNavigation();
+    if(tabletTouchPoints.size===0) tabletTwoFingerLastCenterY=0;
+  };
+  document.addEventListener('pointerup',finishTouch,{capture:true});
+  document.addEventListener('pointercancel',finishTouch,{capture:true});
+}
+function installTabletDoubleTapFit(){
+  let lastTapAt=0, lastTapX=0, lastTapY=0;
+  $viewport.addEventListener('pointerup',e=>{
+    if(e.pointerType!=='touch'||linkDrawMode||e.target.closest('.inlineTextEditor,.link-hotspot')) return;
+    const now=performance.now();
+    if(now-tabletTwoFingerLastEndedAt<450){
+      lastTapAt=0;
+      return;
+    }
+    const closeEnough=Math.hypot(e.clientX-lastTapX,e.clientY-lastTapY)<44;
+    if(lastTapAt&&now-lastTapAt<340&&closeEnough){
+      e.preventDefault();
+      lastTapAt=0;
+      fitWidth();
+      return;
+    }
+    lastTapAt=now;
+    lastTapX=e.clientX;
+    lastTapY=e.clientY;
+  });
+}
 
 function updateHistoryButtons(){
   $undo.disabled=correctionHistoryStack.length===0;
@@ -544,19 +680,20 @@ function updateFullscreenButton(){
 }
 async function toggleFullscreen(){
   try{
-    if(APPLE_TOUCH_DEVICE){
-      tabletFocusFullscreen=!tabletFocusFullscreen;
-      document.body.classList.toggle('tablet-focus-fullscreen',tabletFocusFullscreen);
-      updateFullscreenButton();
-      return;
-    }
     if(currentFullscreenElement()){
       const exit=document.exitFullscreen||document.webkitExitFullscreen;
       if(exit) await exit.call(document);
     }else{
       const root=document.documentElement;
       const enter=root.requestFullscreen||root.webkitRequestFullscreen;
-      if(enter) await enter.call(root);
+      if(enter){
+        try{ await enter.call(root,{navigationUI:'hide'}); }
+        catch(_){ await enter.call(root); }
+      }else{
+        tabletFocusFullscreen=!tabletFocusFullscreen;
+        document.body.classList.toggle('tablet-focus-fullscreen',tabletFocusFullscreen);
+        updateFullscreenButton();
+      }
     }
   }catch(error){
     console.warn('Le mode plein écran n’a pas pu être activé :',error);
@@ -1186,6 +1323,11 @@ function setAnnotationTool(tool){
     button.classList.toggle('selected',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
+  const shapeSelected=['rectangle','ellipse','line'].includes(annotationTool);
+  $compactAnnotationForms.classList.toggle('selected',shapeSelected);
+  $compactAnnotationForms.setAttribute('aria-pressed',String(shapeSelected));
+  $compactFormsPalette.classList.remove('open');
+  $compactAnnotationForms.setAttribute('aria-expanded','false');
   $annotationHint.textContent=annotationTool ? TOOL_HINTS[annotationTool] : 'Choisis une couleur, puis un outil.';
   updateLinksInteractivity();
 }
@@ -1240,8 +1382,17 @@ function setAnnotationPopupCompact(compact){
   $annotationCompactRail.setAttribute('aria-hidden',String(!annotationPopupCompact));
   if(!annotationPopupCompact){
     $compactColorPalette.classList.remove('open');
+    $compactFormsPalette.classList.remove('open');
     $compactAnnotationColor.setAttribute('aria-expanded','false');
+    $compactAnnotationForms.setAttribute('aria-expanded','false');
   }
+}
+
+function placeCompactPopover(trigger,popover){
+  const triggerRect=trigger.getBoundingClientRect();
+  const margin=8;
+  popover.style.left=`${Math.round(triggerRect.right+margin)}px`;
+  popover.style.top=`${Math.round(clamp(triggerRect.top,margin,Math.max(margin,window.innerHeight-popover.offsetHeight-margin)))}px`;
 }
 function keepAnnotationFilesPopupInWindow(left,top){
   const margin=8;
@@ -1405,6 +1556,27 @@ function wrappedTextLines(ctx,text,maxWidth){
   }
   return result;
 }
+function traceSmoothedFreehand(ctx,points){
+  if(!points.length) return;
+  ctx.moveTo(points[0].x,points[0].y);
+  if(points.length===1){
+    ctx.lineTo(points[0].x+.1,points[0].y+.1);
+    return;
+  }
+  if(points.length===2){
+    ctx.lineTo(points[1].x,points[1].y);
+    return;
+  }
+  for(let i=1;i<points.length-1;i++){
+    const midpoint={
+      x:(points[i].x+points[i+1].x)/2,
+      y:(points[i].y+points[i+1].y)/2
+    };
+    ctx.quadraticCurveTo(points[i].x,points[i].y,midpoint.x,midpoint.y);
+  }
+  const last=points[points.length-1];
+  ctx.lineTo(last.x,last.y);
+}
 function drawAnnotation(ctx,a){
   if(!a||pendingTextAnnotation?.annotation===a) return;
   ctx.save();
@@ -1417,8 +1589,8 @@ function drawAnnotation(ctx,a){
     ctx.rotate(rotation);
     ctx.translate(-centerX,-centerY);
   }
-  ctx.strokeStyle=a.color||'#ffe100';
-  ctx.fillStyle=a.color||'#ffe100';
+  ctx.strokeStyle=a.color||'#3b82f6';
+  ctx.fillStyle=a.color||'#3b82f6';
   ctx.lineCap='round';
   ctx.lineJoin='round';
   if(a.kind==='highlight'){
@@ -1431,9 +1603,8 @@ function drawAnnotation(ctx,a){
     const points=a.points||[];
     if(points.length){
       ctx.lineWidth=a.width||DRAW_WIDTH_PX;
-      ctx.beginPath(); ctx.moveTo(points[0].x,points[0].y);
-      for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
-      if(points.length===1) ctx.lineTo(points[0].x+.1,points[0].y+.1);
+      ctx.beginPath();
+      traceSmoothedFreehand(ctx,points);
       ctx.stroke();
     }
   }else if(a.kind==='line'){
@@ -2232,6 +2403,10 @@ function attachDrawHandlers(p){
     if(!drawMode&&!annotationTool&&!linkDrawMode) return;
     ensurePageCanvasMemory(p);
     const now=performance.now();
+    if(e.pointerType==='touch'&&tabletTwoFingerActive){
+      e.preventDefault();
+      return;
+    }
     if(e.pointerType==='touch'&&(globalActivePenPointerId!==null||now<suppressPalmTouchesUntil)){
       e.preventDefault();
       return;
@@ -2242,22 +2417,6 @@ function attachDrawHandlers(p){
       touchGesturePoints.clear();
       twoFingerTouchNavigation=false;
       cancelTwoFingerScrollFrame();
-    }
-    const navigationTouch=e.pointerType==='touch'&&(drawMode||!!annotationTool)&&!linkDrawMode;
-    if(navigationTouch){
-      touchGesturePoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
-      if(touchGesturePoints.size>=2){
-        e.preventDefault();
-        try{p.canDr.setPointerCapture(e.pointerId);}catch(_){}
-        cancelActiveTouchWorkForTwoFingerNavigation();
-        twoFingerTouchNavigation=true;
-        const metrics=twoFingerMetrics();
-        pendingTwoFingerCenterY=metrics?.centerY||0;
-        lastTwoFingerCenterY=metrics?.centerY||0;
-        lastTwoFingerMoveTime=performance.now();
-        smoothedTwoFingerVelocity=0;
-        return;
-      }
     }
     if(activePointerId!==null) return;
     if(e.button!==undefined&&e.button!==0) return;
@@ -2345,7 +2504,7 @@ function attachDrawHandlers(p){
       }
       const sourcePage=selectionGesture.sourcePage;
       if(selectionGesture.rotating){
-        updateRotationFromPoint(toLocal(e),e.shiftKey);
+        updateRotationFromPoint(toLocal(e),e.shiftKey||annotationTouchConstraintActive());
         return;
       }
       const targetPage=selectionGesture.handle ? sourcePage : pageAtClientPoint(e.clientX,e.clientY);
@@ -2423,7 +2582,7 @@ function attachDrawHandlers(p){
     for(const sample of samples.length?samples:[e]){
       const m=toLocal(sample);
       lastDraftPoint=m;
-      updateDraftFromPoint(m,e.shiftKey);
+      updateDraftFromPoint(m,e.shiftKey||annotationTouchConstraintActive());
     }
     redrawDraft(p,draft);
   }
@@ -2574,6 +2733,10 @@ function attachDrawHandlers(p){
   }
   p.canDr.addEventListener('pointerdown',down);
   p.canDr.addEventListener('pointermove',e=>{
+    if(e.pointerType==='touch'&&tabletTwoFingerActive){
+      e.preventDefault();
+      return;
+    }
     if(e.pointerType==='touch'&&(globalActivePenPointerId!==null||performance.now()<suppressPalmTouchesUntil)){
       e.preventDefault();
       return;
@@ -2917,6 +3080,8 @@ async function loadCurrentBook(){
 /*** INIT ***/
 window.addEventListener('load', async ()=>{
   await loadCurrentBook();
+  installTabletGestureController();
+  installTabletDoubleTapFit();
   let collapsed=false; const setCollapsed=c=>{
     collapsed=c;
     $side.classList.toggle('collapsed',c);
@@ -3112,14 +3277,29 @@ window.addEventListener('load', async ()=>{
   $compactAnnotationColor.addEventListener('click',e=>{
     e.stopPropagation();
     const open=!$compactColorPalette.classList.contains('open');
+    $compactFormsPalette.classList.remove('open');
+    $compactAnnotationForms.setAttribute('aria-expanded','false');
     $compactColorPalette.classList.toggle('open',open);
     $compactAnnotationColor.setAttribute('aria-expanded',String(open));
+    if(open) requestAnimationFrame(()=>placeCompactPopover($compactAnnotationColor,$compactColorPalette));
   });
-  $compactColorPalette.addEventListener('click',e=>e.stopPropagation());
-  document.addEventListener('pointerdown',e=>{
-    if(e.target.closest('#compactAnnotationColor,#compactColorPalette')) return;
+  $compactAnnotationForms.addEventListener('click',e=>{
+    e.stopPropagation();
+    const open=!$compactFormsPalette.classList.contains('open');
     $compactColorPalette.classList.remove('open');
     $compactAnnotationColor.setAttribute('aria-expanded','false');
+    $compactFormsPalette.classList.toggle('open',open);
+    $compactAnnotationForms.setAttribute('aria-expanded',String(open));
+    if(open) requestAnimationFrame(()=>placeCompactPopover($compactAnnotationForms,$compactFormsPalette));
+  });
+  $compactColorPalette.addEventListener('click',e=>e.stopPropagation());
+  $compactFormsPalette.addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('pointerdown',e=>{
+    if(e.target.closest('#compactAnnotationColor,#compactColorPalette,#compactAnnotationForms,#compactFormsPalette')) return;
+    $compactColorPalette.classList.remove('open');
+    $compactFormsPalette.classList.remove('open');
+    $compactAnnotationColor.setAttribute('aria-expanded','false');
+    $compactAnnotationForms.setAttribute('aria-expanded','false');
   });
   $openAnnotationFiles.addEventListener('click',openAnnotationFilesPopup);
   $closeAnnotationFiles.addEventListener('click',closeAnnotationFilesPopup);
