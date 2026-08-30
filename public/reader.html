@@ -41,7 +41,7 @@
   body.annotation-select.annotation-dragging .dr{cursor:var(--cursor-hand-closed)!important}
 
   .wrap{ width:100%; margin:0; padding:12px; padding-left:calc(var(--compactW) + 24px); padding-right:calc(var(--panelW) + 24px) }
-  #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center;overscroll-behavior:none;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none }
+  #viewport{ margin-top:8px; display:flex; flex-direction:column; align-items:center;overscroll-behavior:none;touch-action:pan-y;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none }
   .flow-1up{display:block}
   .flow-1up .page{margin:0 0 var(--gap) 0;}
   .flow-2up{display:block}
@@ -158,6 +158,9 @@
   .compactFormsPalette .compactButton svg{display:block;width:20px;height:20px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   body.annotation-erase .dr{cursor:crosshair}
   .annotationHint{font-size:12px;color:#4b5563;margin-top:10px;line-height:1.35}
+  .annotationContextMenu{position:fixed;display:none;z-index:70;min-width:126px;padding:5px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.22);gap:4px;font-family:Calibri,"Carlito","Segoe UI",sans-serif}
+  .annotationContextMenu.open{display:flex}
+  .annotationContextMenu .btn{min-height:38px;flex:1}
   .emptyBookMessage{min-height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center;color:#374151}
   .emptyBookMessage strong{font-size:24px;color:#111827}
   .emptyBookMessage span{font-size:16px}
@@ -355,6 +358,11 @@
   <button class="compactButton annotationTool" data-tool="line" title="Ligne" aria-label="Ligne"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/></svg></button>
 </div>
 
+<div id="annotationContextMenu" class="annotationContextMenu" role="menu" aria-label="Copier ou coller une annotation">
+  <button id="annotationContextCopy" class="btn" type="button" role="menuitem">Copier</button>
+  <button id="annotationContextPaste" class="btn" type="button" role="menuitem">Coller</button>
+</div>
+
 <div id="annotationFilesPopup" class="annotationPopup backupPopup" role="dialog" aria-modal="false" aria-labelledby="annotationFilesPopupTitle">
   <div class="annotationPopupHeader">
     <div id="annotationFilesPopupTitle" class="annotationPopupTitle">Sauvegardes</div>
@@ -479,6 +487,9 @@ const $compactAnnotationColor=document.getElementById('compactAnnotationColor'),
 const $compactAnnotationForms=document.getElementById('compactAnnotationForms'), $compactFormsPalette=document.getElementById('compactFormsPalette');
 const $compactAnnotationUndo=document.getElementById('compactAnnotationUndo'), $compactAnnotationRedo=document.getElementById('compactAnnotationRedo');
 const $compactAnnotationEraser=document.getElementById('compactAnnotationEraser');
+const $annotationContextMenu=document.getElementById('annotationContextMenu');
+const $annotationContextCopy=document.getElementById('annotationContextCopy');
+const $annotationContextPaste=document.getElementById('annotationContextPaste');
 const $slider=document.getElementById('zoomSlider');
 const $linksToggle=document.getElementById('linksToggle');
 const $linkEditor=document.getElementById('linkEditor');
@@ -527,6 +538,8 @@ let tabletTwoFingerScrollFrame=0;
 let tabletTwoFingerTargetScrollY=0;
 let tabletTwoFingerTargetPanX=0;
 let tabletTwoFingerPanLimit=0;
+let annotationContextTarget=null;
+let annotationPastePlacementArmed=false;
 
 function tabletGestureTarget(target){
   return target instanceof Element&&!!target.closest('#viewport,.page,.box,canvas');
@@ -611,6 +624,10 @@ function installTabletGestureController(){
         tabletTwoFingerCandidate=false;
         endTabletTwoFingerNavigation();
       }
+      // Le stylet est toujours prioritaire sur un doigt déjà posé. L'ébauche
+      // éventuellement commencée par le pouce est annulée avant que le même
+      // événement n'atteigne le canevas, puis le stylet devient le constructeur.
+      for(const cancel of [...activePointerCancels]) cancel();
       return;
     }
     if(e.pointerType!=='touch') return;
@@ -678,25 +695,56 @@ function installTabletGestureController(){
   document.addEventListener('pointercancel',finishTouch,{capture:true});
 }
 function installTabletDoubleTapFit(){
-  let lastTapAt=0, lastTapX=0, lastTapY=0;
-  $viewport.addEventListener('pointerup',e=>{
-    if(e.pointerType!=='touch'||linkDrawMode||e.target.closest('.inlineTextEditor,.link-hotspot')) return;
+  const contacts=new Map();
+  let gesture=null;
+  let lastTap=null;
+  const resetView=()=>{
+    panX=0;
+    applyHorizontalPan();
+    fitWidth();
+    requestAnimationFrame(()=>{
+      panX=0;
+      applyHorizontalPan();
+    });
+  };
+  $viewport.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='touch'||annotationTool||drawMode||linkDrawMode||!e.target.closest('.page')||e.target.closest('.inlineTextEditor,.link-hotspot')) return;
+    contacts.set(e.pointerId,{x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY});
+    if(!gesture) gesture={startedAt:performance.now(),maxContacts:0,moved:false,centerX:e.clientX,centerY:e.clientY};
+    gesture.maxContacts=Math.max(gesture.maxContacts,contacts.size);
+  },{capture:true});
+  $viewport.addEventListener('pointermove',e=>{
+    const contact=contacts.get(e.pointerId);
+    if(!contact||!gesture) return;
+    contact.x=e.clientX;
+    contact.y=e.clientY;
+    if(Math.hypot(contact.x-contact.startX,contact.y-contact.startY)>12) gesture.moved=true;
+  },{capture:true});
+  const end=e=>{
+    const contact=contacts.get(e.pointerId);
+    if(!contact||!gesture) return;
+    contacts.delete(e.pointerId);
+    if(contacts.size) return;
+    const finished=gesture;
+    gesture=null;
     const now=performance.now();
-    if(now-tabletTwoFingerLastEndedAt<450){
-      lastTapAt=0;
+    if(finished.moved||now-finished.startedAt>420||![1,2].includes(finished.maxContacts)){
+      lastTap=null;
       return;
     }
-    const closeEnough=Math.hypot(e.clientX-lastTapX,e.clientY-lastTapY)<44;
-    if(lastTapAt&&now-lastTapAt<340&&closeEnough){
+    const tap={at:now,x:contact.x,y:contact.y,fingers:finished.maxContacts};
+    const matches=lastTap&&tap.fingers===lastTap.fingers&&tap.at-lastTap.at<430&&Math.hypot(tap.x-lastTap.x,tap.y-lastTap.y)<54;
+    if(matches){
       e.preventDefault();
-      lastTapAt=0;
-      fitWidth();
-      return;
-    }
-    lastTapAt=now;
-    lastTapX=e.clientX;
-    lastTapY=e.clientY;
-  });
+      lastTap=null;
+      resetView();
+    }else lastTap=tap;
+  };
+  $viewport.addEventListener('pointerup',end,{capture:true});
+  $viewport.addEventListener('pointercancel',e=>{
+    contacts.delete(e.pointerId);
+    if(!contacts.size){ gesture=null; lastTap=null; }
+  },{capture:true});
 }
 
 function updateHistoryButtons(){
@@ -965,7 +1013,7 @@ function applyHorizontalPan(){
   $viewport.style.transform=`translate3d(${Math.round(panX)}px,0,0)`;
 }
 function attachPanHandlers(){
-  let pointerId=null, pointerType=null, startX=0, startY=0, startPanX=0, startScrollY=0, dragLimit=0, gestureAxis=null;
+  let pointerId=null, pointerType=null, startX=0, startY=0, lastX=0, lastY=0, dragLimit=0, gestureAxis=null;
   let pendingPanX=0, pendingScrollY=0, panFrame=0;
 
   const flushPan=()=>{
@@ -994,8 +1042,8 @@ function attachPanHandlers(){
     pointerType=e.pointerType||'mouse';
     startX=e.clientX;
     startY=e.clientY;
-    startPanX=panX;
-    startScrollY=window.scrollY;
+    lastX=e.clientX;
+    lastY=e.clientY;
     dragLimit=horizontalPanLimit();
     pendingPanX=panX;
     pendingScrollY=window.scrollY;
@@ -1017,8 +1065,11 @@ function attachPanHandlers(){
         :(Math.abs(dx)>Math.abs(dy)?'horizontal':'vertical');
     }
     if(!gestureAxis){ e.preventDefault(); return; }
-    pendingPanX=gestureAxis==='vertical'?startPanX:clamp(startPanX+dx,-dragLimit,dragLimit);
-    pendingScrollY=gestureAxis==='horizontal'?startScrollY:startScrollY-dy;
+    const stepX=e.clientX-lastX, stepY=e.clientY-lastY;
+    lastX=e.clientX;
+    lastY=e.clientY;
+    if(gestureAxis!=='vertical') pendingPanX=clamp(pendingPanX+stepX,-dragLimit,dragLimit);
+    if(gestureAxis!=='horizontal') pendingScrollY=clamp(pendingScrollY-stepY,0,Math.max(0,document.documentElement.scrollHeight-window.innerHeight));
     if(!panFrame) panFrame=requestAnimationFrame(flushPan);
     e.preventDefault();
   });
@@ -1734,17 +1785,21 @@ function traceSmoothedFreehand(ctx,points){
   const last=points[points.length-1];
   ctx.lineTo(last.x,last.y);
 }
-function smoothFreehandPoints(points){
+function smoothFreehandPoints(points,passes=1){
   if(!Array.isArray(points)||points.length<3) return points||[];
-  const result=[{...points[0]}];
-  for(let i=1;i<points.length-1;i++){
-    const previous=points[i-1], current=points[i], next=points[i+1];
-    result.push({
-      x:previous.x*.18+current.x*.64+next.x*.18,
-      y:previous.y*.18+current.y*.64+next.y*.18
-    });
+  let result=points.map(point=>({...point}));
+  for(let pass=0;pass<passes;pass++){
+    const source=result;
+    result=[{...source[0]}];
+    for(let i=1;i<source.length-1;i++){
+      const previous=source[i-1], current=source[i], next=source[i+1];
+      result.push({
+        x:previous.x*.24+current.x*.52+next.x*.24,
+        y:previous.y*.24+current.y*.52+next.y*.24
+      });
+    }
+    result.push({...source[source.length-1]});
   }
-  result.push({...points[points.length-1]});
   return result;
 }
 function drawAnnotation(ctx,a){
@@ -2132,6 +2187,25 @@ function pasteCopiedAnnotations(){
   p.canDr.focus({preventScroll:true});
   return true;
 }
+function closeAnnotationContextMenu(){
+  annotationContextTarget=null;
+  $annotationContextMenu.classList.remove('open');
+}
+function openAnnotationContextMenu(p,point,clientX,clientY,annotation=null){
+  if(annotation){
+    setAnnotationTool('select');
+    selectAnnotation(p,annotation);
+  }
+  annotationContextTarget={p,point,clientX,clientY,annotation};
+  $annotationContextCopy.disabled=!annotation;
+  $annotationContextPaste.disabled=!annotationClipboard;
+  $annotationContextMenu.classList.add('open');
+  const margin=8;
+  const width=$annotationContextMenu.offsetWidth;
+  const height=$annotationContextMenu.offsetHeight;
+  $annotationContextMenu.style.left=`${Math.round(clamp(clientX,margin,Math.max(margin,window.innerWidth-width-margin)))}px`;
+  $annotationContextMenu.style.top=`${Math.round(clamp(clientY-height-10,margin,Math.max(margin,window.innerHeight-height-margin)))}px`;
+}
 function clearAllAnnotations(){
   if(pendingTextAnnotation) finishInlineTextEditor(true);
   const clearedPages=pages.map(page=>({
@@ -2384,6 +2458,8 @@ function attachDrawHandlers(p){
   let annotationAutoScrollFrame=0;
   let annotationAutoScrollEdgeStartedAt=0;
   let annotationAutoScrollDirection=0;
+  let annotationLongPressTimer=0;
+  let annotationLongPressStart=null;
   const ANNOTATION_AUTO_SCROLL_EDGE_PX=88;
   const toLocal=e=>pagePointFromClient(p,e.clientX,e.clientY);
   const twoFingerMetrics=()=>{
@@ -2394,6 +2470,11 @@ function attachDrawHandlers(p){
       centerY:(first.y+second.y)/2
     };
   };
+  function cancelAnnotationLongPress(){
+    if(annotationLongPressTimer) clearTimeout(annotationLongPressTimer);
+    annotationLongPressTimer=0;
+    annotationLongPressStart=null;
+  }
   function cancelTwoFingerScrollFrame(){
     if(twoFingerScrollFrame) cancelAnimationFrame(twoFingerScrollFrame);
     twoFingerScrollFrame=0;
@@ -2417,6 +2498,7 @@ function attachDrawHandlers(p){
     if(!twoFingerScrollFrame) twoFingerScrollFrame=requestAnimationFrame(runTwoFingerScroll);
   }
   function cancelActiveTouchWorkForTwoFingerNavigation(){
+    cancelAnnotationLongPress();
     cancelTwoFingerScrollFrame();
     stopAnnotationAutoScroll();
     const canceledPointerId=activePointerId;
@@ -2540,9 +2622,10 @@ function attachDrawHandlers(p){
             y:previousRaw.y+(raw.y-previousRaw.y)*ratio
           };
           const prior=draft.points[draft.points.length-1];
+          const follow=draft.inputType==='pen' ? .42 : .68;
           draft.points.push({
-            x:prior.x+(sample.x-prior.x)*.82,
-            y:prior.y+(sample.y-prior.y)*.82
+            x:prior.x+(sample.x-prior.x)*follow,
+            y:prior.y+(sample.y-prior.y)*follow
           });
         }
       }
@@ -2625,8 +2708,33 @@ function attachDrawHandlers(p){
       globalActiveTouchStartY=e.clientY;
     }
     activePointerCancels.add(cancelActiveTouchWorkForTwoFingerNavigation);
-    try{p.canDr.setPointerCapture(e.pointerId);}catch(_){}
+    // Un doigt simplement posé peut être le pouce de contrainte. On ne le
+    // capture qu'après son premier mouvement ; le stylet reste ainsi libre de
+    // devenir immédiatement le pointeur qui dessine.
+    if(activePointerType!=='touch'){
+      try{p.canDr.setPointerCapture(e.pointerId);}catch(_){}
+    }
     const start=toLocal(e);
+    if(annotationPastePlacementArmed&&annotationTool==='select'&&annotationClipboard&&['touch','pen'].includes(activePointerType)&&!findAnnotationAt(p,start)){
+      const target={point:start,clientX:e.clientX,clientY:e.clientY};
+      cancelActiveTouchWorkForTwoFingerNavigation();
+      openAnnotationContextMenu(p,target.point,target.clientX,target.clientY,null);
+      return;
+    }
+    if(['touch','pen'].includes(activePointerType)&&annotationTool&&!annotationEraseMode){
+      annotationLongPressStart={pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY,point:start};
+      annotationLongPressTimer=setTimeout(()=>{
+        if(activePointerId!==e.pointerId||!annotationLongPressStart) return;
+        const hit=findAnnotationAt(p,annotationLongPressStart.point);
+        // Sur une zone vide, "Coller" n'est proposé qu'après une copie et
+        // lorsque l'outil de sélection est actif. Un pouce posé pendant le
+        // dessin d'une forme ne peut donc pas ouvrir ce menu par accident.
+        if(!hit&&!(annotationTool==='select'&&annotationClipboard)) return;
+        const target={...annotationLongPressStart};
+        cancelActiveTouchWorkForTwoFingerNavigation();
+        openAnnotationContextMenu(p,target.point,target.clientX,target.clientY,hit);
+      },700);
+    }
     if(annotationEraseMode&&annotationTool==='select'){
       eraserCandidate={
         annotation:findAnnotationAt(p,start),
@@ -2676,7 +2784,7 @@ function attachDrawHandlers(p){
       return;
     }
     if(annotationTool==='highlight') draft={kind:'highlight',x:start.x,y:start.y,x2:start.x,y2:start.y,color:annotationColor,width:HIGHLIGHT_WIDTH_PX};
-    else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],lastRawPoint:start,color:annotationColor,width:DRAW_WIDTH_PX};
+    else if(annotationTool==='freehand') draft={kind:'freehand',points:[start],lastRawPoint:start,inputType:activePointerType,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool==='line') draft={kind:'line',x1:start.x,y1:start.y,x2:start.x,y2:start.y,color:annotationColor,width:DRAW_WIDTH_PX};
     else if(annotationTool) draft={kind:annotationTool,x:start.x,y:start.y,w:0,h:0,color:annotationColor,widthLine:DRAW_WIDTH_PX};
     else { draft=start; draft.w=0; draft.h=0; }
@@ -2687,8 +2795,14 @@ function attachDrawHandlers(p){
   function move(e){
     if(activePointerId===null||e.pointerId!==activePointerId) return;
     e.preventDefault();
+    if(annotationLongPressStart&&Math.hypot(e.clientX-annotationLongPressStart.clientX,e.clientY-annotationLongPressStart.clientY)>10){
+      cancelAnnotationLongPress();
+    }
     if(activePointerType==='touch'&&Math.hypot(e.clientX-globalActiveTouchStartX,e.clientY-globalActiveTouchStartY)>5){
       globalActiveTouchHasMoved=true;
+      try{
+        if(!p.canDr.hasPointerCapture?.(e.pointerId)) p.canDr.setPointerCapture(e.pointerId);
+      }catch(_){}
     }
     if(eraserCandidate){
       if(Math.hypot(e.clientX-eraserCandidate.startClient.x,e.clientY-eraserCandidate.startClient.y)>10){
@@ -2790,6 +2904,7 @@ function attachDrawHandlers(p){
   }
   function up(e){
     if(activePointerId===null||(e&&e.pointerId!==activePointerId)) return;
+    cancelAnnotationLongPress();
     stopAnnotationAutoScroll();
     const completedPointerId=activePointerId;
     const completedPointerType=activePointerType;
@@ -2904,7 +3019,7 @@ function attachDrawHandlers(p){
     if(draft.kind==='freehand'){
       const annotation=draft; draft=null;
       delete annotation.lastRawPoint;
-      annotation.points=smoothFreehandPoints(annotation.points);
+      annotation.points=smoothFreehandPoints(annotation.points,annotation.inputType==='pen'?3:2);
       if(annotation.points.length>1) commitAnnotation(p,annotation);
       redrawDraft(p,null); return;
     }
@@ -3516,11 +3631,33 @@ window.addEventListener('load', async ()=>{
   $compactColorPalette.addEventListener('click',e=>e.stopPropagation());
   $compactFormsPalette.addEventListener('click',e=>e.stopPropagation());
   document.addEventListener('pointerdown',e=>{
+    if(!e.target.closest('#annotationContextMenu')) closeAnnotationContextMenu();
     if(e.target.closest('#compactAnnotationColor,#compactColorPalette,#compactAnnotationForms,#compactFormsPalette')) return;
     $compactColorPalette.classList.remove('open');
     $compactFormsPalette.classList.remove('open');
     $compactAnnotationColor.setAttribute('aria-expanded','false');
     $compactAnnotationForms.setAttribute('aria-expanded','false');
+  });
+  $annotationContextCopy.addEventListener('click',()=>{
+    if(annotationContextTarget?.annotation){
+      setAnnotationTool('select');
+      selectAnnotation(annotationContextTarget.p,annotationContextTarget.annotation);
+      copySelectedAnnotations();
+      annotationPastePlacementArmed=true;
+      $annotationHint.textContent='Annotation copiée. Touche un emplacement vide, puis choisis Coller.';
+    }
+    closeAnnotationContextMenu();
+  });
+  $annotationContextPaste.addEventListener('click',()=>{
+    const target=annotationContextTarget;
+    if(target&&annotationClipboard){
+      setAnnotationTool('select');
+      annotationPointerClient={x:target.clientX,y:target.clientY};
+      pasteCopiedAnnotations();
+      annotationPointerClient=null;
+      annotationPastePlacementArmed=false;
+    }
+    closeAnnotationContextMenu();
   });
   $openAnnotationFiles.addEventListener('click',openAnnotationFilesPopup);
   $closeAnnotationFiles.addEventListener('click',closeAnnotationFilesPopup);
